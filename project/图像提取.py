@@ -88,9 +88,6 @@ class TuXiangTiQu:
         M = cv2.getPerspectiveTransform(np.float32(dingdian_list), dst_points)
         # 对图像进行透视变换，得到拉正后的车牌图像
         plate_image = cv2.warpPerspective(image, M, (int(plate_width), int(plate_height)))
-
-        # 保存车牌图像
-        cv2.imwrite('plate_image.jpg', cv2.cvtColor(plate_image, cv2.COLOR_RGB2BGR))
         
         # 测试显示
         # 创建一个新的figure
@@ -119,7 +116,7 @@ class TuXiangTiQu:
         # 显示所有的subplot
         plt.show()
 
-        # 返回车牌图像
+        # 返回车牌图像(rgb格式)
         return plate_image
     
         
@@ -129,6 +126,15 @@ class TuXiangTiQu:
         self.get_image_info(image_name)
         # 提取车牌图片
         car_number_image =  self.get_car_number_image(image_name)
+        self.save_car_number_image(image_name,car_number_image,'car_number_image')
+
+    # 保存车牌图片
+    def save_car_number_image(self,image_name, image_file,save_path):
+        # 如果目录不存在，则创建它
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
+        save_path = save_path+'/'+image_name
+        cv2.imwrite(save_path, cv2.cvtColor(image_file, cv2.COLOR_RGB2BGR))
 
 txtq = TuXiangTiQu('D:\My_Code_Project\cv2_image_test')
 txtq.start('03-103_253-267&425_483&565-483&565_271&497_267&425_480&483-0_0_3_25_25_33_25_25-110-47.jpg')
