@@ -49,10 +49,9 @@ class SetPage(ttk.Frame):
 class TrainPage(ttk.Frame):
     def __init__(self, master):
         super().__init__(master)
-        self.progress_nums = 0 # 进度条数值
-        self.progress_nums_all = 9999999999999 # 进度条总数值
         # self.configure(width=1170, height=400)
         self.grid(sticky='nsew')
+        self.master_App = master
         master.grid_rowconfigure(1, weight=1)
         master.grid_columnconfigure(0, weight=1) 
         self.grid_propagate(1) # 使窗口自适应大小
@@ -60,75 +59,24 @@ class TrainPage(ttk.Frame):
         # 创建显示块
         self.view_frame = ttk.Frame(self,height=500)
         self.view_frame.pack(side=tk.TOP,fill=tk.BOTH,expand=True)
-        # 加入文件夹选择frame(按钮+输入框)
-        self.view_frame.select_frame = ttk.Frame(self.view_frame, width=200, height=100)
-        self.view_frame.select_frame.folder_path = tk.StringVar()
-        self.view_frame.select_frame.folder_path.set('D:/My_Code_Project/三下机器学习课设/解压数据包/车牌/CCPD2020/test')
-        # 路径显示框
-        self.view_frame.select_frame.folder_entry = ttk.Entry(self.view_frame.select_frame, textvariable=self.view_frame.select_frame.folder_path, state=tk.DISABLED)
-        self.view_frame.select_frame.folder_entry.place(x=0, y=0)
-        # 选择按钮
-        self.view_frame.select_frame.select_button = ttk.Button(self.view_frame.select_frame, text="训练选择", command=self.select_folder)
-        self.view_frame.select_frame.select_button.place(x=0,y=30)
-        # 训练按钮
-        self.view_frame.select_frame.train_button = ttk.Button(self.view_frame.select_frame, text="开始训练", command=self.train_click_add_thread)
-        self.view_frame.select_frame.train_button.place(x=75,y=30)
-        self.view_frame.select_frame.place(x=20,y=10)
-        # 进度条初始化
-        self.progress_bar = self.ProgressBar(self)
-        self.progress_bar.place(x=0, y=100)
+
+        # 创建后训练类
+        self.after_train = self.AfterTrain(self)
+        self.after_train.place(x=50, y=20)
+
         # 创建预训练类
         self.pre_train = self.PreTrain(self)
-        self.pre_train.place(x=800, y=0, width=300, height=200)
-
+        self.pre_train.place(x=850, y=20)
 
         # 创建日志输出台
         self.log_frame = LogClass(self)
         self.log_frame.frame.pack(side=tk.BOTTOM, fill=tk.BOTH)
 
-    # 选择按钮点击事件
-    def select_folder(self):
-        old_folder = self.view_frame.select_frame.folder_path.get()
-        folder_selected = filedialog.askdirectory()
-        if not folder_selected:
-            folder_selected = old_folder
-        self.view_frame.select_frame.folder_path.set(folder_selected)
-
-    # 训练按钮点击事件加入线程
-    def train_click_add_thread(self):
-        threading.Thread(target=self.train_click).start()
-
-    # 训练按钮点击事件
-    def train_click(self):
-        folder_path = self.view_frame.select_frame.folder_path.get()
-        if folder_path == '      请选择训练文件夹' or not folder_path:
-            self.log_frame.add_log("请选择训练文件夹", 'warning')
-        else:
-            # 开始训练
-            if self.master.train_status.is_set():
-                self.view_frame.select_frame.train_button.config(text="停止训练")
-                self.master.train_status.clear()
-                self.log_frame.add_log("开始训练\n训练进度······", 'info')
-                # 禁用选择文件夹按钮
-                self.view_frame.select_frame.select_button.config(state=tk.DISABLED, cursor='no')
-                self.train_data_handle = self.TrainDateHandle( folder_path,self)
-                # 进度条更新
-                self.progress_bar.update_progressbar()
-                # 使用多个线程训练
-                future = threadPool.submit(self.train_data_handle.train_start())
-                
-            else:     # 停止训练
-                self.view_frame.select_frame.train_button.config(text="开始训练")
-                self.log_frame.add_log("人为停止训练", 'info')
-                self.master.train_status.set()
-                print("人为停止训练")
-                # 启用选择文件夹按钮
-                self.view_frame.select_frame.select_button.config(state=tk.NORMAL, cursor='arrow')
 
     # 训练数据处理类
     class TrainDateHandle:
         def __init__(self, folder_path, master):
-            self.master = master
+            self.master_Train = master
             self.folder_path = folder_path
             self.image_info_dict = {}
         # 训练启动方法
@@ -141,24 +89,24 @@ class TrainPage(ttk.Frame):
             self.txtq = 图像提取.TuXiangTiQu(self.folder_path)
             for name in files:
                 # 判断是否暂停
-                if self.master.master.train_status.is_set():
-                    self.master.log_frame.add_log("人为停止训练", 'info')
-                    self.master.progress_nums = 0
+                if self.master_Train.master_TrainPage.master_App.train_status.is_set():
+                    self.master_Train.log_frame.add_log("人为停止训练", 'info')
+                    self.master_Train.progress_nums = 0
                     print(self.txtq.image_info_dict)
                     return
                 # 获取图片信息
                 image_info = self.txtq.start(name)
-                self.master.progress_nums += 1
-                self.master.log_frame.add_log("图片信息：{}".format(image_info),'info')
+                self.master_Train.progress_nums += 1
+                self.master_Train.master_TrainPage.log_frame.add_log("图片信息：{}".format(image_info),'info')
                 print("图片信息：{}".format(image_info))
-                self.master.log_frame.add_log("训练进度：{}/{}".format(self.master.progress_nums, len(files)), 'info')
-                self.master.progress_nums_all = len(files) # 进度条总数值 
+                self.master_Train.master_TrainPage.log_frame.add_log("训练进度：{}/{}".format(self.master_Train.progress_nums, len(files)), 'info')
+                self.master_Train.progress_nums_all = len(files) # 进度条总数值 
 
-    # 进度条类
+    # 进度条类(上层：预训练类/后训练类)
     class ProgressBar(ttk.Frame):
         def __init__(self,master):
-            super().__init__(master, width=300, height=100)
-            self.master_trainPage = master
+            super().__init__(master, width=280, height=25)
+            self.master_Train = master
             self.label = ttk.Label(self, text="训练进度：")
             self.label.place(x=0, y=0)
             self.progressbar = ttk.Progressbar(self, length=200, mode='determinate') # 显示进度条进度
@@ -169,36 +117,38 @@ class TrainPage(ttk.Frame):
         # 进度条更新（参数：进度数量）
         def update_progressbar(self):
             # 判断是否暂停，改标签
-            if self.master_trainPage.master.train_status.is_set():
+            if self.master_Train.master_TrainPage.master_App.train_status.is_set():
                 # self.progressbar['value'] = 0
                 self.progressbar_label['text'] = "训练中断..."
                 # self.progressbar_label = ttk.Label(self, text="0%", width=3 , font=("微软雅黑", 8))
                 self.progressbar_label['width'] = 9
                 return
             self.progressbar_label['width'] = 3
-            self.progressbar['maximum'] = self.master_trainPage.progress_nums_all
-            self.progressbar['value'] = self.master_trainPage.progress_nums
-            self.master_trainPage.after(100, self.update_progressbar) # 递归调用，每100毫秒调用一次update_progressbar()方法
-            self.progressbar_label['text'] = str(int(self.master_trainPage.progress_nums/self.master_trainPage.progress_nums_all*100)) + '%'
+            self.progressbar['maximum'] = self.master_Train.progress_nums_all
+            self.progressbar['value'] = self.master_Train.progress_nums
+            self.master_Train.after(100, self.update_progressbar) # 递归调用，每100毫秒调用一次update_progressbar()方法
+            self.progressbar_label['text'] = str(int(self.master_Train.progress_nums/self.master_Train.progress_nums_all*100)) + '%'
 
-    # 预训练类+gui
-    class PreTrain(ttk.Frame):
+    # 后训练类+gui（上层：测试页面）
+    class AfterTrain(ttk.Frame):
         def __init__(self, master):
             # 创建一个新的样式
             style = ttk.Style()
             style.configure('My.TFrame', background='red')
-            super().__init__(master, style='My.TFrame')
-            self.place(x=0, y=200, width=300, height=100)
+            super().__init__(master.view_frame, style='My.TFrame')
+            self.place(width=300, height=150)
             self.master_TrainPage = master
             self.folder_path = None
             self.image_info_dict = {}
+            # 进度条初始化
             self.progress_nums = 0
             self.progress_nums_all = 9999999999999
 
             # 加入文件夹选择frame(按钮+输入框)
-            self.select_frame = ttk.Frame(self, width=300, height=200)
+            self.select_frame = ttk.Frame(self, width=200, height=100)
             self.select_frame.folder_path = tk.StringVar()
             self.select_frame.folder_path.set('D:/My_Code_Project/三下机器学习课设/解压数据包/车牌/CCPD2020/test')
+            self.select_frame.place(x=40, y=10)
             # 路径显示框
             self.select_frame.folder_entry = ttk.Entry(self.select_frame, textvariable=self.select_frame.folder_path, state=tk.DISABLED)
             self.select_frame.folder_entry.place(x=0, y=0)
@@ -208,7 +158,81 @@ class TrainPage(ttk.Frame):
             # 训练按钮
             self.select_frame.train_button = ttk.Button(self.select_frame, text="开始训练", command=self.train_click_add_thread)
             self.select_frame.train_button.place(x=75,y=30)
-            self.select_frame.place(x=20,y=10)
+            # 进度条初始化
+            self.progress_bar = self.master_TrainPage.ProgressBar(self)
+            self.progress_bar.place(x=0, y=100)
+
+        
+        # 选择按钮点击事件
+        def select_folder(self):
+            old_folder = self.select_frame.folder_path.get()
+            folder_selected = filedialog.askdirectory()
+            if not folder_selected:
+                folder_selected = old_folder
+            self.select_frame.folder_path.set(folder_selected)
+
+        # 训练按钮点击事件加入线程
+        def train_click_add_thread(self):
+            threading.Thread(target=self.train_click).start()
+
+        # 训练按钮点击事件
+        def train_click(self):
+            folder_path = self.select_frame.folder_path.get()
+            if folder_path == '      请选择训练文件夹' or not folder_path:
+                self.master_TrainPage.log_frame.add_log("请选择训练文件夹", 'warning')
+            else:
+                # 开始训练
+                if self.master_TrainPage.master.train_status.is_set():
+                    self.select_frame.train_button.config(text="停止训练")
+                    self.master_TrainPage.master.train_status.clear()
+                    self.master_TrainPage.log_frame.add_log("开始训练\n训练进度······", 'info')
+                    # 禁用选择文件夹按钮
+                    self.select_frame.select_button.config(state=tk.DISABLED, cursor='no')
+                    self.train_data_handle = self.master_TrainPage.TrainDateHandle(folder_path,self)
+                    # 进度条更新
+                    self.progress_bar.update_progressbar()
+                    # 使用多个线程训练
+                    future = threadPool.submit(self.train_data_handle.train_start())
+                    
+                else:     # 停止训练
+                    self.select_frame.train_button.config(text="开始训练")
+                    self.master_TrainPage.log_frame.add_log("人为停止训练", 'info')
+                    self.master_TrainPage.master.train_status.set()
+                    print("人为停止训练")
+                    # 启用选择文件夹按钮
+                    self.select_frame.select_button.config(state=tk.NORMAL, cursor='arrow')
+
+        
+
+
+    # 预训练类+gui
+    class PreTrain(ttk.Frame):
+        def __init__(self, master):
+            # 创建一个新的样式
+            style = ttk.Style()
+            style.configure('My.TFrame', background='red')
+            super().__init__(master.view_frame, style='My.TFrame')
+            self.place(x=0, y=200, width=300, height=150)
+            self.master_TrainPage = master
+            self.folder_path = None
+            self.image_info_dict = {}
+            self.progress_nums = 0
+            self.progress_nums_all = 9999999999999
+
+            # 加入文件夹选择frame(按钮+输入框)
+            self.select_frame = ttk.Frame(self, width=200, height=100)
+            self.select_frame.folder_path = tk.StringVar()
+            self.select_frame.folder_path.set('D:/My_Code_Project/三下机器学习课设/解压数据包/车牌/CCPD2020/test')
+            self.select_frame.place(x=40,y=10)
+            # 路径显示框
+            self.select_frame.folder_entry = ttk.Entry(self.select_frame, textvariable=self.select_frame.folder_path, state=tk.DISABLED)
+            self.select_frame.folder_entry.place(x=0, y=0)
+            # 选择按钮
+            self.select_frame.select_button = ttk.Button(self.select_frame, text="训练选择", command=self.select_folder)
+            self.select_frame.select_button.place(x=0,y=30)
+            # 训练按钮
+            self.select_frame.train_button = ttk.Button(self.select_frame, text="开始训练", command=self.train_click_add_thread)
+            self.select_frame.train_button.place(x=75,y=30)
             # 进度条初始化
             self.progress_bar = self.master_TrainPage.ProgressBar(self)
             self.progress_bar.place(x=0, y=100)
