@@ -7,6 +7,7 @@ import threading
 import queue
 import os
 import time
+from PIL import Image, ImageTk
 
 threadPool = ThreadPoolExecutor(max_workers=5)
 
@@ -134,8 +135,8 @@ class TrainPage(ttk.Frame):
         def __init__(self, master):
             # 创建一个新的样式
             style = ttk.Style()
-            style.configure('My.TFrame', background='red')
-            super().__init__(master.view_frame, style='My.TFrame')
+            # style.configure('My.TFrame', background='red')
+            super().__init__(master.view_frame, borderwidth=2, relief='groove')
             self.place(width=300, height=150)
             self.master_TrainPage = master
             self.folder_path = None
@@ -144,11 +145,23 @@ class TrainPage(ttk.Frame):
             self.progress_nums = 0
             self.progress_nums_all = 9999999999999
 
+            # 添加标签说明
+            self.type_label = ttk.Label(self, text="车牌训练", font=("微软雅黑", 11))
+            self.type_label.place(x=100, y=0)
+            # 添加问号提示
+            query_image =Image.open('./label_image/image1.png')
+            query_image = query_image.resize((20,20), Image.LANCZOS)
+            self.photo = ImageTk.PhotoImage(query_image)
+            self.query_label = ttk.Label(self, image=self.photo) 
+            self.query_label.place(x=170,y=0)
+            # 添加说明
+            ToolTip(self.query_label, "此训练模块应选择车牌数据集")
+
             # 加入文件夹选择frame(按钮+输入框)
             self.select_frame = ttk.Frame(self, width=200, height=100)
             self.select_frame.folder_path = tk.StringVar()
             self.select_frame.folder_path.set('D:/My_Code_Project/三下机器学习课设/解压数据包/车牌/CCPD2020/test')
-            self.select_frame.place(x=40, y=10)
+            self.select_frame.place(x=70, y=40)
             # 路径显示框
             self.select_frame.folder_entry = ttk.Entry(self.select_frame, textvariable=self.select_frame.folder_path, state=tk.DISABLED)
             self.select_frame.folder_entry.place(x=0, y=0)
@@ -160,7 +173,7 @@ class TrainPage(ttk.Frame):
             self.select_frame.train_button.place(x=75,y=30)
             # 进度条初始化
             self.progress_bar = self.master_TrainPage.ProgressBar(self)
-            self.progress_bar.place(x=0, y=100)
+            self.progress_bar.place(x=15, y=120)
 
         
         # 选择按钮点击事件
@@ -210,20 +223,33 @@ class TrainPage(ttk.Frame):
         def __init__(self, master):
             # 创建一个新的样式
             style = ttk.Style()
-            style.configure('My.TFrame', background='red')
-            super().__init__(master.view_frame, style='My.TFrame')
-            self.place(x=0, y=200, width=300, height=150)
+            # style.configure('My.TFrame', background='red')
+            super().__init__(master.view_frame,borderwidth=2, relief='groove')
+            self.place(width=300, height=150)
             self.master_TrainPage = master
             self.folder_path = None
             self.image_info_dict = {}
             self.progress_nums = 0
             self.progress_nums_all = 9999999999999
 
+            # 添加标签说明
+            self.type_label = ttk.Label(self, text="预训练", font=("微软雅黑", 11))
+            self.type_label.place(x=110, y=0)
+            
+            # 添加问号提示
+            query_image =Image.open('./label_image/image1.png')
+            query_image = query_image.resize((20,20), Image.LANCZOS)
+            self.photo = ImageTk.PhotoImage(query_image)
+            self.query_label = ttk.Label(self, image=self.photo) 
+            self.query_label.place(x=170,y=0)
+            # 添加说明
+            ToolTip(self.query_label, "预训练模块是提前对单\n字符进行模型训练并保存，\n然后再学习车牌数据集")
+
             # 加入文件夹选择frame(按钮+输入框)
             self.select_frame = ttk.Frame(self, width=200, height=100)
             self.select_frame.folder_path = tk.StringVar()
             self.select_frame.folder_path.set('D:/My_Code_Project/三下机器学习课设/解压数据包/车牌/CCPD2020/test')
-            self.select_frame.place(x=40,y=10)
+            self.select_frame.place(x=70,y=40)
             # 路径显示框
             self.select_frame.folder_entry = ttk.Entry(self.select_frame, textvariable=self.select_frame.folder_path, state=tk.DISABLED)
             self.select_frame.folder_entry.place(x=0, y=0)
@@ -235,31 +261,8 @@ class TrainPage(ttk.Frame):
             self.select_frame.train_button.place(x=75,y=30)
             # 进度条初始化
             self.progress_bar = self.master_TrainPage.ProgressBar(self)
-            self.progress_bar.place(x=0, y=100)
+            self.progress_bar.place(x=15, y=120)
 
-        # 预训练启动方法
-        def pre_train_start(self):
-            self.get_image_info()
-
-        # 获取图像信息
-        def get_image_info(self):
-            files = os.listdir(self.folder_path)
-            self.txtq = 图像提取.TuXiangTiQu(self.folder_path)
-            for name in files:
-                # 判断是否暂停
-                if self.master.master.train_status.is_set():
-                    self.master.log_frame.add_log("人为停止训练", 'info')
-                    self.master.progress_nums = 0
-                    print(self.txtq.image_info_dict)
-                    return
-                # 获取图片信息
-                image_info = self.txtq.start(name)
-                self.master.progress_nums += 1
-                self.master.log_frame.add_log("图片信息：{}".format(image_info),'info')
-                print("图片信息：{}".format(image_info))
-                self.master.log_frame.add_log("训练进度：{}/{}".format(self.master.progress_nums, len(files)), 'info')
-                self.master.progress_nums_all = len(files) # 进度条总数值
-        
         # 选择按钮点击事件
         def select_folder(self):
             old_folder = self.select_frame.folder_path.get()
@@ -270,7 +273,34 @@ class TrainPage(ttk.Frame):
 
         # 训练按钮点击事件加入线程
         def train_click_add_thread(self):
-            threading.Thread(target=self.train_click).start()   
+            threading.Thread(target=self.train_click).start()
+
+        # 训练按钮点击事件
+        def train_click(self):
+            folder_path = self.select_frame.folder_path.get()
+            if folder_path == '      请选择训练文件夹' or not folder_path:
+                self.master_TrainPage.log_frame.add_log("请选择训练文件夹", 'warning')
+            else:
+                # 开始训练
+                if self.master_TrainPage.master.train_status.is_set():
+                    self.select_frame.train_button.config(text="停止训练")
+                    self.master_TrainPage.master.train_status.clear()
+                    self.master_TrainPage.log_frame.add_log("开始训练\n训练进度······", 'info')
+                    # 禁用选择文件夹按钮
+                    self.select_frame.select_button.config(state=tk.DISABLED, cursor='no')
+                    self.train_data_handle = self.master_TrainPage.TrainDateHandle(folder_path,self)
+                    # 进度条更新
+                    self.progress_bar.update_progressbar()
+                    # 使用多个线程训练
+                    future = threadPool.submit(self.train_data_handle.train_start())
+                    
+                else:     # 停止训练
+                    self.select_frame.train_button.config(text="开始训练")
+                    self.master_TrainPage.log_frame.add_log("人为停止训练", 'info')
+                    self.master_TrainPage.master.train_status.set()
+                    print("人为停止训练")
+                    # 启用选择文件夹按钮
+                    self.select_frame.select_button.config(state=tk.NORMAL, cursor='arrow')
 
 
 # 测试页面
@@ -369,6 +399,29 @@ class NavButton:
         #     if hasattr(self.master, 'log_frame'):
         #         self.master.log_frame.frame.grid_forget()
 
+# 工具提示类，鼠标悬停在小部件上时显示工具提示
+class ToolTip:
+    def __init__(self, widget, text):
+        self.widget = widget
+        self.text = text
+        self.tooltip = None
+        self.widget.bind("<Enter>", self.show_tooltip)
+        self.widget.bind("<Leave>", self.hide_tooltip)
+
+    def show_tooltip(self, event=None):
+        x = y = 0
+        x, y, _, _ = self.widget.bbox("insert")
+        x += self.widget.winfo_rootx() + 25
+        y += self.widget.winfo_rooty() + 20
+        self.tooltip = tk.Toplevel(self.widget)
+        self.tooltip.wm_overrideredirect(True)
+        self.tooltip.wm_geometry(f"+{x}+{y}")
+        tk.Label(self.tooltip, text=self.text, background="#ffffe0", relief="solid", borderwidth=1).pack()
+
+    def hide_tooltip(self, event=None):
+        if self.tooltip:
+            self.tooltip.destroy()
+            self.tooltip = None
 
 
 if __name__ == "__main__":
