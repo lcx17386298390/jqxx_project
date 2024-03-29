@@ -119,8 +119,7 @@ class TuXiangTiQu:
         # 返回车牌图像(rgb格式)
         return plate_image
     
-        
-
+    
     def start(self,image_name):
         # 获取图像信息
         self.get_image_info(image_name)
