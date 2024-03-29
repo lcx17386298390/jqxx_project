@@ -135,7 +135,7 @@ class TuXiangTiQu:
         save_path = save_path+'/'+image_name
         cv2.imwrite(save_path, cv2.cvtColor(image_file, cv2.COLOR_RGB2BGR))
 
-txtq = TuXiangTiQu('D:\My_Code_Project\cv2_image_test')
-txtq.start('03-103_253-267&425_483&565-483&565_271&497_267&425_480&483-0_0_3_25_25_33_25_25-110-47.jpg')
+# txtq = TuXiangTiQu('D:\My_Code_Project\Image_Dateset')
+# txtq.start('03-103_253-267&425_483&565-483&565_271&497_267&425_480&483-0_0_3_25_25_33_25_25-110-47.jpg')
 
 
