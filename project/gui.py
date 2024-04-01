@@ -8,6 +8,7 @@ import queue
 import os
 import time
 from PIL import Image, ImageTk
+from model_train import Model_train
 
 threadPool = ThreadPoolExecutor(max_workers=5)
 
@@ -21,6 +22,10 @@ class Application(tk.Tk):
         # 训练状体： 设置：可训练； 未设置：不可训练
         self.train_status = threading.Event()
         self.train_status.set()
+        # 模型加载路径（写在设置页里）
+        self.load_model_path_pre = 'D:\My_Code_Project\三下机器学习课设\models\\train_3\single_number\model.h5'
+        self.load_model_path_after = 'D:\My_Code_Project\三下机器学习课设\models\\train_1\car_number\model.h5'
+
  
         # 功能子页面列表
         self.frames = {}
@@ -33,7 +38,7 @@ class Application(tk.Tk):
         self.nav_button = NavButton(self)
         self.nav_button.frame.grid(row=0, column=0, sticky="nw")  # 注意这里的 "nw"
         self.nav_button.show_frame(TrainPage)
-    
+
 # 设置页面
 class SetPage(ttk.Frame):
     def __init__(self, master):
@@ -76,15 +81,19 @@ class TrainPage(ttk.Frame):
 
     # 训练数据处理类
     class TrainDateHandle:
-        def __init__(self, folder_path, master):
+        def __init__(self, master, train_type='pre_train', folder_path=None):
+            self.train_type = train_type
             self.master_Train = master
             self.folder_path = folder_path
             self.image_info_dict = {}
         # 训练启动方法
         def train_start(self):
-            self.get_image_info()
+            if self.train_type == 'pre_train':
+                self.pre_train()
+            elif self.train_type == 'after_train':
+                self.get_image_info()
         
-        # 获取图像信息
+        # 获取图像信息(车牌训练)
         def get_image_info(self):
             files = os.listdir(self.folder_path)
             self.txtq = 图像提取.TuXiangTiQu(self.folder_path)
@@ -101,7 +110,19 @@ class TrainPage(ttk.Frame):
                 self.master_Train.master_TrainPage.log_frame.add_log("图片信息：{}".format(image_info),'info')
                 print("图片信息：{}".format(image_info))
                 self.master_Train.master_TrainPage.log_frame.add_log("训练进度：{}/{}".format(self.master_Train.progress_nums, len(files)), 'info')
-                self.master_Train.progress_nums_all = len(files) # 进度条总数值 
+                self.master_Train.progress_nums_all = len(files) # 进度条总数值
+
+        # 预训练(不需要提取车牌操作，直接用单数字训练集)
+        def pre_train(self):
+            # 创建模型训练对象
+            self.model_train = Model_train(self.master_Train.master_TrainPage.master_App,self.master_Train)
+            # 使用模型测试接口
+            self.model_train.test('D://My_Code_Project//Image_Dateset//single_number//VehicleLicense//Data//xin//xin_0001.jpg', train_type='single_number', 
+                                  txt_file_path='D://My_Code_Project//Image_Dateset//single_number//VehicleLicense//trainval.txt', load_model_path=self.master_Train.master_TrainPage.master_App.load_model_path_pre)
+            # 训练完成，设置训练状态
+            self.model_train.train_is_stop = False
+
+            
 
     # 进度条类(上层：预训练类/后训练类)
     class ProgressBar(ttk.Frame):
@@ -150,10 +171,10 @@ class TrainPage(ttk.Frame):
             self.type_label.place(x=100, y=0)
             # 添加问号提示
             query_image =Image.open('./label_image/image1.png')
-            query_image = query_image.resize((20,20), Image.LANCZOS)
+            query_image = query_image.resize((15,15), Image.LANCZOS)
             self.photo = ImageTk.PhotoImage(query_image)
             self.query_label = ttk.Label(self, image=self.photo) 
-            self.query_label.place(x=170,y=0)
+            self.query_label.place(x=166,y=3)
             # 添加说明
             ToolTip(self.query_label, "此训练模块应选择车牌数据集")
 
@@ -206,6 +227,10 @@ class TrainPage(ttk.Frame):
                     self.progress_bar.update_progressbar()
                     # 使用多个线程训练
                     future = threadPool.submit(self.train_data_handle.train_start())
+                    # 训练完成，设置训练状态
+                    self.master_TrainPage.master.train_status.set()
+                    self.select_frame.train_button.config(text="开始训练")
+                    # print('训练完成')
                     
                 else:     # 停止训练
                     self.select_frame.train_button.config(text="开始训练")
@@ -238,10 +263,10 @@ class TrainPage(ttk.Frame):
             
             # 添加问号提示
             query_image =Image.open('./label_image/image1.png')
-            query_image = query_image.resize((20,20), Image.LANCZOS)
+            query_image = query_image.resize((15,15), Image.LANCZOS)
             self.photo = ImageTk.PhotoImage(query_image)
             self.query_label = ttk.Label(self, image=self.photo) 
-            self.query_label.place(x=170,y=0)
+            self.query_label.place(x=166,y=3)
             # 添加说明
             ToolTip(self.query_label, "预训练模块是提前对单\n字符进行模型训练并保存，\n然后再学习车牌数据集")
 
@@ -282,22 +307,24 @@ class TrainPage(ttk.Frame):
                 self.master_TrainPage.log_frame.add_log("请选择训练文件夹", 'warning')
             else:
                 # 开始训练
-                if self.master_TrainPage.master.train_status.is_set():
+                if self.master_TrainPage.master_App.train_status.is_set():
                     self.select_frame.train_button.config(text="停止训练")
-                    self.master_TrainPage.master.train_status.clear()
+                    self.master_TrainPage.master_App.train_status.clear()
                     self.master_TrainPage.log_frame.add_log("开始训练\n训练进度······", 'info')
                     # 禁用选择文件夹按钮
                     self.select_frame.select_button.config(state=tk.DISABLED, cursor='no')
-                    self.train_data_handle = self.master_TrainPage.TrainDateHandle(folder_path,self)
+                    self.train_data_handle = self.master_TrainPage.TrainDateHandle(self, train_type='pre_train', folder_path=folder_path)
                     # 进度条更新
                     self.progress_bar.update_progressbar()
                     # 使用多个线程训练
                     future = threadPool.submit(self.train_data_handle.train_start())
+                    print('训练完成')
+                    self.master_TrainPage.master_App.train_status.set()
                     
                 else:     # 停止训练
                     self.select_frame.train_button.config(text="开始训练")
-                    self.master_TrainPage.log_frame.add_log("人为停止训练", 'info')
-                    self.master_TrainPage.master.train_status.set()
+                    self.master_TrainPage.log_frame.add_log("预训练停止中，请稍等···", 'info')
+                    self.master_TrainPage.master_App.train_status.set()
                     print("人为停止训练")
                     # 启用选择文件夹按钮
                     self.select_frame.select_button.config(state=tk.NORMAL, cursor='arrow')

@@ -10,14 +10,28 @@ from keras.utils import to_categorical
 from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
 from keras.utils.vis_utils import plot_model
+import keras
 
 # 定义模型训练类
 class Model_train:
-    def __init__(self):
+    def __init__(self, master_App, master_Train):
+        # 设置顶层（切换训练状态）
+        self.master_App = master_App
+        # 设置上层(主要用来更改进度条状态)
+        self.master_Train = master_Train
         # 车牌所有的字符类别
         self.num_classes = 65
         # 图片的高和宽
         self.img_height, self.img_width = 20, 20
+        # 设置训练是否人为中止标志
+        self.train_is_stop = False
+        # 这里可以设置一些训练参数（比如Epoch总个数，tatch_size个数）
+        self.epochs = 10
+        self.batch_size = 128
+        # 当前epoch和batch数
+        self.current_epoch = 0
+        self.current_batche = 0
+
         # 创建模型
         self.model = self.create_model()
         self.model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
@@ -26,6 +40,7 @@ class Model_train:
     # 训练模型(默认训练单字符识别模型, 传入参数为'single_number'则训练单字符识别模型，否则训练多字符识别模型)
     def fit_model(self, train_type='single_number', txt_file_path=None, img_dir_path=None):
         self.images, self.labels = [], []
+        my_callback = self.MyCallback(self)
         if train_type == 'single_number':
             if txt_file_path is None:
                 raise ValueError('单字符训练txt文件路径为空')
@@ -41,9 +56,26 @@ class Model_train:
         self.images /= 255
         self.labels = to_categorical(self.labels, self.num_classes) # 将类别标签转换为one-hot编码
         self.x_train, self.x_test, self.y_train, self.y_test = train_test_split(self.images, self.labels, test_size=0.2, random_state=42)
-        history = self.model.fit(self.x_train, self.y_train, batch_size=128, epochs=10, verbose=1, validation_data=(self.x_test, self.y_test))
+        history = self.model.fit(self.x_train, self.y_train, batch_size=self.batch_size, epochs=self.epochs, verbose=1, validation_data=(self.x_test, self.y_test), callbacks=[my_callback])
         return history
     
+    # 定义中止训练的回调函数
+    class MyCallback(keras.callbacks.Callback):
+        def __init__(self, master):
+            self.master_ModelTrain = master
+        def on_epoch_end(self, epoch, logs=None):
+            self.master_ModelTrain.current_epoch = epoch
+            if self.master_ModelTrain.master_App.train_status.is_set():
+                self.master_ModelTrain.model.stop_training = True
+                self.master_ModelTrain.train_is_stop = True
+        def on_train_batch_end(self, batch, logs=None):
+            self.master_ModelTrain.current_batche = batch
+            # 进度条参数更改
+            self.master_ModelTrain.master_Train.progress_nums = self.master_ModelTrain.batch_size * self.master_ModelTrain.current_epoch + self.master_ModelTrain.current_batche
+            self.master_ModelTrain.master_Train.progress_nums_all = self.master_ModelTrain.epochs * self.master_ModelTrain.batch_size
+            if self.master_ModelTrain.master_App.train_status.is_set():
+                self.master_ModelTrain.model.stop_training = True
+                self.master_ModelTrain.train_is_stop = True
 
     # 加载车牌数据
     def load_data(self):
@@ -113,6 +145,7 @@ class Model_train:
             os.makedirs(self.save_train_file_floder)
         self.save_file_path = os.path.join(self.save_train_file_floder, 'model.h5')
         self.model.save(self.save_file_path)
+        print('模型保存成功，保存路径为:', os.path.abspath(self.save_file_path))
     
     # 学习效果查看
     def train_result_view(self,history):
@@ -145,31 +178,53 @@ class Model_train:
     def load_model(self, model_path):
         # 判断是否有模型文件
         if os.path.exists(model_path):
-            self.model.load_weights(model_path)
-            print('模型加载成功')
-            return self.model
-        print('模型加载失败，重新训练')
-        return None
+            try:
+                self.model.load_weights(model_path)
+            except Exception as e:
+                print('模型加载失败，将重新预训练模型')
+                return None
+            else:
+                print('模型加载成功')
+                return self.model
+        else:
+            print('模型文件不存在，将重新预训练模型')
+            return None
 
     # 开始训练
-    def test(self, image_name, train_type='single_number', txt_file_path=None, img_dir_path=None):
-        # 加载模型
-        load_model = self.load_model('./models/train_1/single_number/model.h5')
-        self.model = load_model if load_model is not None else self.model
+    def test(self, test_image_name, train_type=None, txt_file_path=None, img_dir_path=None, load_model_path=None):
+        load_model = None
         self.history = None
+        # 加载模型
+        if load_model_path is None:
+            print('没有模型文件，开始训练')
+        else:
+            print('正在加载模型文件:', os.path.abspath(load_model_path))
+            load_model = self.load_model(load_model_path)
+            self.model = load_model if load_model is not None else self.model
+        # 模型加载不成功（错误/路径为空），开始训练
         if load_model is None:
-            # 没有模型文件，开始训练
+            # 单字符训练
             if train_type == 'single_number':
                 self.history = self.fit_model(train_type=train_type, txt_file_path=txt_file_path)
+                if self.train_is_stop:
+                    print('训练中止')
+                    return
+                print('模型训练完成')
+                # 保存模型
+                self.save_model('./models')
+                # 可视化学习效果
+                self.train_result_view(self.history)
+            # 车牌训练
             elif train_type == 'car_number':
                 self.history = self.fit_model(train_type=train_type, img_dir_path=img_dir_path)
-        self.save_model('./models')
-        # 测试显示
-        new_img = cv2.imread(image_name, cv2.IMREAD_GRAYSCALE)
-        self.train_result_view(self.history)
+                self.save_model('./models')
+                # 可视化学习效果
+                self.train_result_view(self.history)
+         # 测试显示
+        new_img = cv2.imread(test_image_name, cv2.IMREAD_GRAYSCALE)
         print('预测结果',self.predict(new_img))
 
-# 实例化模型训练类
-model_train = Model_train()
-# 开始训练
-model_train.test('D://My_Code_Project//Image_Dateset//single_number//VehicleLicense//Data//xin//xin_0001.jpg', train_type='single_number', txt_file_path='D://My_Code_Project//Image_Dateset//single_number//VehicleLicense//trainval.txt')
+# # 实例化模型训练类
+# model_train = Model_train()
+# # 开始训练
+# model_train.test('D://My_Code_Project//Image_Dateset//single_number//VehicleLicense//Data//xin//xin_0001.jpg', train_type='single_number', txt_file_path='D://My_Code_Project//Image_Dateset//single_number//VehicleLicense//trainval.txt')
