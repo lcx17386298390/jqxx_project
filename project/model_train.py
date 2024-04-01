@@ -4,8 +4,8 @@ import os
 import cv2
 import numpy as np
 from keras.models import Sequential
-from keras.layers import Dense, Dropout, Flatten
-from keras.layers import Conv2D, MaxPooling2D
+from keras.layers import Dense, Dropout, Flatten, Activation, Add
+from keras.layers import Conv2D, MaxPooling2D, ZeroPadding2D, AveragePooling2D, BatchNormalization
 from keras.utils import to_categorical
 from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
@@ -14,22 +14,24 @@ import keras
 
 # 定义模型训练类
 class Model_train:
-    def __init__(self, master_App, master_Train):
+    def __init__(self, master_App, master_Train, SetPage, model_type='CNN'):
         # 设置顶层（切换训练状态）
         self.master_App = master_App
         # 设置上层(主要用来更改进度条状态)
         self.master_Train = master_Train
+        # 提取设置界面（方便取得设置的值）
+        self.SetPage = SetPage
         # 车牌所有的字符类别
         self.num_classes = 65
         # 图片的高和宽
         self.img_height, self.img_width = 20, 20
         # 设置训练是否人为中止标志
         self.train_is_stop = False
-        # 这里可以设置一些训练参数（比如Epoch总个数，tatch_size个数）
-        self.epochs = 10
-        self.batch_size = 128
-        self.test_size = 0.2
-        self.random_state = 42
+        # 这里可以设置一些训练参数（比如Epoch总个数，tatch_size个数）->后续可以在界面上设置
+        self.epochs = 0
+        self.batch_size = 0
+        self.test_size = 0
+        self.random_state = 0
         # 当前epoch和batch数
         self.current_epoch = 0
         self.current_batche = 0
@@ -38,12 +40,16 @@ class Model_train:
 
 
         # 创建模型
-        self.model = self.create_model()
+        self.model = self.create_model(model_type=model_type)
         self.model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 
 
     # 训练模型(默认训练单字符识别模型, 传入参数为'single_number'则训练单字符识别模型，否则训练多字符识别模型)
     def fit_model(self, train_type='single_number', txt_file_path=None, img_dir_path=None):
+        self.epochs = int(self.master_App.frames[self.SetPage].epoch_input_entry.get())
+        self.batch_size = int(self.master_App.frames[self.SetPage].batch_size_input_entry.get())
+        self.test_size = float(self.master_App.frames[self.SetPage].test_size_input_entry.get())
+        self.random_state = int(self.master_App.frames[self.SetPage].random_state_input_entry.get())
         self.images, self.labels = [], []
         my_callback = self.MyCallback(self)
         if train_type == 'single_number':
@@ -56,7 +62,7 @@ class Model_train:
                 raise ValueError('车牌训练文件夹路径为空')
             else:
                 self.images, self.labels = self.load_data(img_dir_path)
-        self.train_image_nums = int(len(self.images)*(1-self.test_size))
+        self.train_image_nums = int(len(self.images)*(1-float(self.master_App.frames[self.SetPage].test_size_input_entry.get())))
         self.images = np.array(self.images, dtype='float32')
         self.labels = np.array(self.labels)
         self.images /= 255
@@ -113,16 +119,123 @@ class Model_train:
 
 
     # 创建模型
-    def create_model(self):
+    def create_model(self,model_type):
         model = Sequential()
-        model.add(Conv2D(32, kernel_size=(3, 3), activation='relu', input_shape=(self.img_height, self.img_width, 1)))
-        model.add(Conv2D(64, (3, 3), activation='relu'))
-        model.add(MaxPooling2D(pool_size=(2, 2)))
-        model.add(Dropout(0.25))
-        model.add(Flatten())
-        model.add(Dense(128, activation='relu'))
-        model.add(Dropout(0.5))
-        model.add(Dense(self.num_classes, activation='softmax'))
+        if model_type == 'CNN':
+            model.add(Conv2D(32, kernel_size=(3, 3), activation='relu', input_shape=(self.img_height, self.img_width, 1)))
+            model.add(Conv2D(64, (3, 3), activation='relu'))
+            model.add(MaxPooling2D(pool_size=(2, 2)))
+            model.add(Dropout(0.25))
+            model.add(Flatten())
+            model.add(Dense(128, activation='relu'))
+            model.add(Dropout(0.5))
+            model.add(Dense(self.num_classes, activation='softmax'))
+        # LeNet-5结构
+        elif model_type == 'LeNet-5':
+            model.add(Conv2D(6, kernel_size=(5, 5), strides=(1, 1), activation='tanh', input_shape=(32,32,1), padding="same"))
+            model.add(AveragePooling2D(pool_size=(2, 2), strides=(1, 1), padding='valid'))
+            model.add(Conv2D(16, kernel_size=(5, 5), strides=(1, 1), activation='tanh', padding='valid'))
+            model.add(AveragePooling2D(pool_size=(2, 2), strides=(2, 2), padding='valid'))
+            model.add(Conv2D(120, kernel_size=(5, 5), strides=(1, 1), activation='tanh', padding='valid'))
+            model.add(Flatten())
+            model.add(Dense(84, activation='tanh'))
+            model.add(Dense(10, activation='softmax'))
+        # AlexNet结构
+        elif model_type == 'AlexNet':
+            # 添加第一层卷积层，有 96 个 11x11 的卷积核，步长为 4，激活函数为 ReLU
+            model.add(Conv2D(filters=96, input_shape=(224,224,3), kernel_size=(11,11), strides=(4,4), padding='valid'))
+            model.add(Activation('relu'))
+            # 添加最大池化层，池化窗口大小为 2x2
+            model.add(MaxPooling2D(pool_size=(2,2), strides=(2,2), padding='valid'))
+            # 添加第二层卷积层，有 256 个 11x11 的卷积核，步长为 1，激活函数为 ReLU
+            model.add(Conv2D(filters=256, kernel_size=(11,11), strides=(1,1), padding='valid'))
+            model.add(Activation('relu'))
+            # 添加最大池化层，池化窗口大小为 2x2
+            model.add(MaxPooling2D(pool_size=(2,2), strides=(2,2), padding='valid'))
+            # 添加第三层卷积层，有 384 个 3x3 的卷积核，步长为 1，激活函数为 ReLU
+            model.add(Conv2D(filters=384, kernel_size=(3,3), strides=(1,1), padding='valid'))
+            model.add(Activation('relu'))
+            # 添加第四层卷积层，有 384 个 3x3 的卷积核，步长为 1，激活函数为 ReLU
+            model.add(Conv2D(filters=384, kernel_size=(3,3), strides=(1,1), padding='valid'))
+            model.add(Activation('relu'))
+            # 添加第五层卷积层，有 256 个 3x3 的卷积核，步长为 1，激活函数为 ReLU
+            model.add(Conv2D(filters=256, kernel_size=(3,3), strides=(1,1), padding='valid'))
+            model.add(Activation('relu'))
+            # 添加最大池化层，池化窗口大小为 2x2
+            model.add(MaxPooling2D(pool_size=(2,2), strides=(2,2), padding='valid'))
+            # 将特征图展平为一维的向量
+            model.add(Flatten())
+            # 添加第一个全连接层，有 4096 个神经元，激活函数为 ReLU
+            model.add(Dense(4096, input_shape=(224*224*3,)))
+            model.add(Activation('relu'))
+            # 添加 Dropout 层，防止过拟合
+            model.add(Dropout(0.4))
+            # 添加第二个全连接层，有 4096 个神经元，激活函数为 ReLU
+            model.add(Dense(4096))
+            model.add(Activation('relu'))
+            # 添加 Dropout 层，防止过拟合
+            model.add(Dropout(0.4))
+            # 添加第三个全连接层，有 1000 个神经元，激活函数为 ReLU
+            model.add(Dense(1000))
+            model.add(Activation('relu'))
+            # 添加 Dropout 层，防止过拟合
+            model.add(Dropout(0.4))
+            # 添加输出层，有 17 个神经元（对应于 17 个类别），激活函数为 softmax
+            model.add(Dense(17))
+            model.add(Activation('softmax'))
+        # VGGNet-16
+        elif model_type == 'VGGNet-16':
+            model.add(Conv2D(64, (3, 3), input_shape=(self.img_height, self.img_width, 1), padding='same', activation='relu'))
+            model.add(Conv2D(64, (3, 3), activation='relu', padding='same'))
+            model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
+            model.add(Conv2D(128, (3, 3), activation='relu', padding='same'))
+            model.add(Conv2D(128, (3, 3), activation='relu', padding='same'))
+            model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
+            model.add(Conv2D(256, (3, 3), activation='relu', padding='same'))
+            model.add(Conv2D(256, (3, 3), activation='relu', padding='same'))
+            model.add(Conv2D(256, (3, 3), activation='relu', padding='same'))
+            model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
+            model.add(Conv2D(512, (3, 3), activation='relu', padding='same'))
+            model.add(Conv2D(512, (3, 3), activation='relu', padding='same'))
+            model.add(Conv2D(512, (3, 3), activation='relu', padding='same'))
+            model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
+            model.add(Conv2D(512, (3, 3), activation='relu', padding='same'))
+            model.add(Conv2D(512, (3, 3), activation='relu', padding='same'))
+            model.add(Conv2D(512, (3, 3), activation='relu', padding='same'))
+            model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
+            model.add(Flatten())
+            model.add(Dense(4096, activation='relu'))
+            model.add(Dropout(0.5))
+            model.add(Dense(4096, activation='relu'))
+            model.add(Dropout(0.5))
+            model.add(Dense(self.num_classes, activation='softmax'))
+        # ResNet-50结构
+        elif model_type == 'ResNet-50':
+            model.add(ZeroPadding2D((3, 3), input_shape=(self.img_height, self.img_width, 1)))
+            model.add(Conv2D(64, (7, 7), strides=(2, 2), name='conv1', kernel_initializer='glorot_uniform'))
+            model.add(BatchNormalization(axis=3, name='bn_conv1'))
+            model.add(Activation('relu'))
+            model.add(MaxPooling2D((3, 3), strides=(2, 2)))
+            model.add(Conv2D(64, (1, 1), strides=(1, 1), kernel_initializer='glorot_uniform', name='res2a_branch2a'))
+            model.add(BatchNormalization(axis=3, name='bn2a_branch2a'))
+            model.add(Activation('relu'))
+            model.add(Conv2D(64, (3, 3), strides=(1, 1), kernel_initializer='glorot_uniform', padding='same', name='res2a_branch2b'))
+            model.add(BatchNormalization(axis=3, name='bn2a_branch2b'))
+            model.add(Activation('relu'))
+            model.add(Conv2D(256, (1, 1), strides=(1, 1), kernel_initializer='glorot_uniform', name='res2a_branch2c'))
+            model.add(Conv2D(256, (1, 1), strides=(1, 1), kernel_initializer='glorot_uniform', name='res2a_branch1'))
+            model.add(BatchNormalization(axis=3, name='bn2a_branch2c'))
+            model.add(BatchNormalization(axis=3, name='bn2a_branch1'))
+            model.add(Add()([model.layers[-1].output, model.layers[-2].output]))
+            model.add(Activation('relu'))
+            model.add(Conv2D(64, (1, 1), strides=(1, 1), kernel_initializer='glorot_uniform', name='res2b_branch2a'))
+            model.add(BatchNormalization(axis=3, name='bn2b_branch2a'))
+            model.add(Activation('relu'))
+            model.add(Conv2D(64, (3, 3), strides=(1, 1), kernel_initializer='glorot_uniform', padding='same', name='res2b'))
+        # InceptionV3结构
+        elif model_type=='InceptionV3':
+            from keras.applications.inception_v3 import InceptionV3
+            model = InceptionV3(include_top=True, weights=None, input_tensor=None, input_shape=(self.img_height, self.img_width, 1), pooling=None, classes=self.num_classes)
         return model
 
     # 预测函数

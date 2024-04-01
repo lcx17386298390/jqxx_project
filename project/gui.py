@@ -1,5 +1,6 @@
 import tkinter as tk
-from tkinter import ttk,filedialog
+from tkinter import ttk,filedialog,messagebox
+from tkinter.ttk import *
 import logging
 import 图像提取
 from concurrent.futures import ThreadPoolExecutor
@@ -9,6 +10,7 @@ import os
 import time
 from PIL import Image, ImageTk
 from model_train import Model_train
+import re
 
 threadPool = ThreadPoolExecutor(max_workers=5)
 
@@ -41,6 +43,8 @@ class Application(tk.Tk):
         self.nav_button = NavButton(self)
         self.nav_button.frame.grid(row=0, column=0, sticky="nw")  # 注意这里的 "nw"
         self.nav_button.show_frame(TrainPage)
+        # 关闭窗口事件（关掉训练线程）
+        self.protocol("WM_DELETE_WINDOW", lambda: (threading.Event().set, self.train_status.set(), self.destroy())) # 关闭窗口时，关闭线程
 
 # 设置页面
 class SetPage(ttk.Frame):
@@ -51,8 +55,141 @@ class SetPage(ttk.Frame):
         master.grid_rowconfigure(1, weight=1)
         master.grid_columnconfigure(0, weight=1) 
         self.grid_propagate(1)
-        label = ttk.Label(self, text="设置")
-        label.place(x=180, y=140)        
+
+        # 添加配置
+        self.model_select_label = self.__model_select_label(self)
+        self.model_select_box = self.__model_select_box(self)
+        self.epoch_input_label = self.__epoch_input_label(self)
+        self.model_load_label = self.__model_load_label(self)
+        self.model_load_box = self.__model_load_box(self)
+        self.epoch_input_entry = self.__epoch_input_entry(self)
+        self.batch_size_input_label = self.__batch_size_input_label(self)
+        self.batch_size_input_entry = self.__batch_size_input_entry(self)
+        self.test_size_input_label = self.__test_size_input_label(self)
+        self.test_size_input_entry = self.__test_size_input_entry(self)
+        self.random_state_input_label = self.__random_state_input_label(self)
+        self.random_state_input_entry = self.__random_state_input_entry(self)
+        self.save_sets_button = self.__save_sets_button(self)
+
+    def scrollbar_autohide(self,vbar, hbar, widget):
+        """自动隐藏滚动条"""
+        def show():
+            if vbar: vbar.lift(widget)
+            if hbar: hbar.lift(widget)
+        def hide():
+            if vbar: vbar.lower(widget)
+            if hbar: hbar.lower(widget)
+        hide()
+        widget.bind("<Enter>", lambda e: show())
+        if vbar: vbar.bind("<Enter>", lambda e: show())
+        if vbar: vbar.bind("<Leave>", lambda e: hide())
+        if hbar: hbar.bind("<Enter>", lambda e: show())
+        if hbar: hbar.bind("<Leave>", lambda e: hide())
+        widget.bind("<Leave>", lambda e: hide())
+    def v_scrollbar(self,vbar, widget, x, y, w, h, pw, ph):
+        widget.configure(yscrollcommand=vbar.set)
+        vbar.config(command=widget.yview)
+        vbar.place(relx=(w + x) / pw, rely=y / ph, relheight=h / ph, anchor='ne')
+    def h_scrollbar(self,hbar, widget, x, y, w, h, pw, ph):
+        widget.configure(xscrollcommand=hbar.set)
+        hbar.config(command=widget.xview)
+        hbar.place(relx=x / pw, rely=(y + h) / ph, relwidth=w / pw, anchor='sw')
+    def create_bar(self,master, widget,is_vbar,is_hbar, x, y, w, h, pw, ph):
+        vbar, hbar = None, None
+        if is_vbar:
+            vbar = Scrollbar(master)
+            self.v_scrollbar(vbar, widget, x, y, w, h, pw, ph)
+        if is_hbar:
+            hbar = Scrollbar(master, orient="horizontal")
+            self.h_scrollbar(hbar, widget, x, y, w, h, pw, ph)
+        self.scrollbar_autohide(vbar, hbar, widget)
+    def __model_select_label(self,parent):
+        label = Label(parent,text="训练模型结构选择",anchor="center", )
+        label.place(x=190, y=90, width=90, height=30)
+        return label
+    def __model_select_box(self,parent):
+        cb = Combobox(parent, state="readonly", )
+        cb['values'] = ("CNN（浅层应用）","LeNet-5","AlexNet","VGGNet-16","ResNet-50","InceptionV3")
+        cb.current(0)
+        cb.place(x=322, y=87, width=150, height=30)
+        return cb
+    def __epoch_input_label(self,parent):
+        label = Label(parent,text="epoch",anchor="center", )
+        label.place(x=190, y=180, width=90, height=30)
+        return label
+    def __model_load_label(self,parent):
+        label = Label(parent,text="训练模型加载",anchor="center", )
+        label.place(x=720, y=90, width=90, height=30)
+        return label
+    def __model_load_box(self,parent):
+        cb = Combobox(parent, state="readonly", )
+        cb['values'] = ("请选择结构类型")
+        cb.current(0)
+        cb.place(x=850, y=90, width=150, height=30)
+        return cb
+    def __epoch_input_entry(self,parent):
+        ipt = Entry(parent, )
+        ipt.place(x=320, y=180, width=150, height=30)
+        ipt.insert(0, '10')
+        ipt.bind("<FocusOut>",lambda event:  self.is_valid_char(ipt, 'int', '10'))
+        return ipt
+    def __batch_size_input_label(self,parent):
+        label = Label(parent,text="batch_size",anchor="center", )
+        label.place(x=190, y=270, width=90, height=30)
+        return label
+    def __batch_size_input_entry(self,parent):
+        ipt = Entry(parent, )
+        ipt.place(x=320, y=270, width=150, height=30)
+        ipt.insert(0, '128')
+        ipt.bind("<FocusOut>",lambda event:  self.is_valid_char(ipt, 'int', '128'))
+        return ipt
+    def __test_size_input_label(self,parent):
+        label = Label(parent,text="训练集大小",anchor="center", )
+        label.place(x=720, y=180, width=90, height=30)
+        return label
+    def __test_size_input_entry(self,parent):
+        ipt = Entry(parent, )
+        ipt.place(x=850, y=180, width=150, height=30)
+        ipt.insert(0, '0.2')
+        ipt.bind("<FocusOut>",lambda event:  self.is_valid_char(ipt, 'int', '128'))
+        return ipt
+    def __random_state_input_label(self,parent):
+        label = Label(parent,text="random_state",anchor="center", )
+        label.place(x=720, y=270, width=90, height=30)
+        return label
+    def __random_state_input_entry(self,parent):
+        ipt = Entry(parent, )
+        ipt.place(x=850, y=270, width=150, height=30)
+        ipt.insert(0, '42')
+        ipt.bind("<FocusOut>",lambda event:  self.is_valid_char(ipt, 'int', '42'))
+        return ipt
+    def __save_sets_button(self,parent):
+        btn = Button(parent, text="保存配置", takefocus=False,command=self.save_sets)
+        btn.place(x=1024, y=602, width=56, height=30)
+        return btn
+    
+    # 保存设置
+    def save_sets(self):
+        pass
+    
+    # 限制输入类型
+    def is_valid_char(event,element,input_type,default):
+        s = element.get()
+        if input_type == 'int':
+            # 判断是否为整数
+            if re.match(r'^-?\d+$', s):
+                return True
+            messagebox.showwarning('警告', '请输入整数')
+        # 判断是否为 0-1 之间的小数
+        if input_type == 'float':
+            if re.match(r'^0\.\d+$', s):
+                return True
+            messagebox.showwarning('警告', '请输入0-1之间的小数')
+        element.delete(0, tk.END)
+        element.insert(0, default)
+        return False
+
+
 
 # 训练页面
 class TrainPage(ttk.Frame):
@@ -118,8 +255,22 @@ class TrainPage(ttk.Frame):
 
         # 预训练(不需要提取车牌操作，直接用单数字训练集)
         def pre_train(self):
+            # 获取模型结构选择
+            model_type = self.master_Train.master_TrainPage.master_App.frames[SetPage].model_select_box.get()
+            if model_type == 'CNN（浅层应用）':
+                model_type = 'CNN'
+            elif model_type == 'LeNet-5':
+                model_type = 'LeNet-5'
+            elif model_type == 'AlexNet':
+                model_type = 'AlexNet'
+            elif model_type == 'VGGNet-16':
+                model_type = 'VGGNet-16'
+            elif model_type == 'ResNet-50':
+                model_type = 'ResNet-50'
             # 创建模型训练对象
-            self.model_train = Model_train(self.master_Train.master_TrainPage.master_App,self.master_Train)
+            # 打印
+            self.master_Train.master_TrainPage.log_frame.add_log("开始预训练{}".format(model_type), 'info')
+            self.model_train = Model_train(self.master_Train.master_TrainPage.master_App,self.master_Train,SetPage,model_type='CNN')
             # 使用模型测试接口
             self.model_train.test('D://My_Code_Project//Image_Dateset//single_number//VehicleLicense//Data//xin//xin_0001.jpg', train_type='single_number', 
                                   txt_file_path=self.txt_file_path, load_model_path=self.master_Train.master_TrainPage.master_App.load_model_path_pre)
