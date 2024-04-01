@@ -28,9 +28,14 @@ class Model_train:
         # 这里可以设置一些训练参数（比如Epoch总个数，tatch_size个数）
         self.epochs = 10
         self.batch_size = 128
+        self.test_size = 0.2
+        self.random_state = 42
         # 当前epoch和batch数
         self.current_epoch = 0
         self.current_batche = 0
+        # 训练图片总数量（用于进度条，训练数量= 图片总数*（1-testsize））
+        self.train_image_nums = int()
+
 
         # 创建模型
         self.model = self.create_model()
@@ -51,11 +56,12 @@ class Model_train:
                 raise ValueError('车牌训练文件夹路径为空')
             else:
                 self.images, self.labels = self.load_data(img_dir_path)
+        self.train_image_nums = int(len(self.images)*(1-self.test_size))
         self.images = np.array(self.images, dtype='float32')
         self.labels = np.array(self.labels)
         self.images /= 255
         self.labels = to_categorical(self.labels, self.num_classes) # 将类别标签转换为one-hot编码
-        self.x_train, self.x_test, self.y_train, self.y_test = train_test_split(self.images, self.labels, test_size=0.2, random_state=42)
+        self.x_train, self.x_test, self.y_train, self.y_test = train_test_split(self.images, self.labels, test_size=self.test_size, random_state=self.random_state)
         history = self.model.fit(self.x_train, self.y_train, batch_size=self.batch_size, epochs=self.epochs, verbose=1, validation_data=(self.x_test, self.y_test), callbacks=[my_callback])
         return history
     
@@ -64,18 +70,20 @@ class Model_train:
         def __init__(self, master):
             self.master_ModelTrain = master
         def on_epoch_end(self, epoch, logs=None):
-            self.master_ModelTrain.current_epoch = epoch
+            self.master_ModelTrain.current_epoch = epoch+1
             if self.master_ModelTrain.master_App.train_status.is_set():
                 self.master_ModelTrain.model.stop_training = True
                 self.master_ModelTrain.train_is_stop = True
+                self.master_ModelTrain.master_App.train_is_stop = True
         def on_train_batch_end(self, batch, logs=None):
-            self.master_ModelTrain.current_batche = batch
+            self.master_ModelTrain.current_batche = (self.master_ModelTrain.train_image_nums/self.master_ModelTrain.batch_size)*self.master_ModelTrain.current_epoch + batch
             # 进度条参数更改
-            self.master_ModelTrain.master_Train.progress_nums = self.master_ModelTrain.batch_size * self.master_ModelTrain.current_epoch + self.master_ModelTrain.current_batche
-            self.master_ModelTrain.master_Train.progress_nums_all = self.master_ModelTrain.epochs * self.master_ModelTrain.batch_size
+            self.master_ModelTrain.master_Train.progress_nums = self.master_ModelTrain.current_batche
+            self.master_ModelTrain.master_Train.progress_nums_all = (self.master_ModelTrain.train_image_nums/self.master_ModelTrain.batch_size)*self.master_ModelTrain.epochs
             if self.master_ModelTrain.master_App.train_status.is_set():
                 self.master_ModelTrain.model.stop_training = True
                 self.master_ModelTrain.train_is_stop = True
+                self.master_ModelTrain.master_App.train_is_stop = True
 
     # 加载车牌数据
     def load_data(self):
