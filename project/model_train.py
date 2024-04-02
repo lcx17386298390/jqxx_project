@@ -21,6 +21,8 @@ class Model_train:
         self.master_Train = master_Train
         # 提取设置界面（方便取得设置的值）
         self.SetPage = SetPage
+        # 设置模型结构类别
+        self.model_type = model_type
         # 车牌所有的字符类别
         self.num_classes = 65
         # 图片的高和宽
@@ -250,18 +252,15 @@ class Model_train:
         return result
     
     # 保存模型
-    def save_model(self, model_path, train_type='single_number'):
+    def save_model(self, model_path):
+        model_path = os.path.join(model_path, self.model_type)  # 加上模型结构类型
         if not os.path.exists(model_path):
             os.makedirs(model_path)
         # 获取目录下的所有子目录
         dirs = [d for d in os.listdir(model_path) if os.path.isdir(os.path.join(model_path, d))]
         # 计算子目录的数量
         num_dirs = len(dirs)+1
-        self.save_train_file_floder = None
-        if train_type == 'single_number':
-            self.save_train_file_floder = os.path.join(model_path, 'train'+str('_'+str(num_dirs)+'/single_number'))
-        elif train_type == 'car_number':
-            self.save_train_file_floder = os.path.join(model_path, 'train'+str('_'+str(num_dirs)+'/car_number'))
+        self.save_train_file_floder = os.path.join(model_path, 'train'+str(num_dirs))
         if not os.path.exists(self.save_train_file_floder):
             os.makedirs(self.save_train_file_floder)
         self.save_file_path = os.path.join(self.save_train_file_floder, 'model.h5')
@@ -312,7 +311,7 @@ class Model_train:
             return None
 
     # 开始训练
-    def test(self, test_image_name, train_type=None, txt_file_path=None, img_dir_path=None, load_model_path=None):
+    def test(self, test_image_name, train_type=None, txt_file_path=None, img_dir_path=None, load_model_path=None, save_model_path='./models'):
         load_model = None
         self.history = None
         # 加载模型
@@ -332,13 +331,13 @@ class Model_train:
                     return
                 print('模型训练完成')
                 # 保存模型
-                self.save_model('./models')
+                self.save_model(save_model_path, train_type='single_number')
                 # 可视化学习效果
                 self.train_result_view(self.history)
             # 车牌训练
             elif train_type == 'car_number':
                 self.history = self.fit_model(train_type=train_type, img_dir_path=img_dir_path)
-                self.save_model('./models')
+                self.save_model(save_model_path, train_type='car_number')
                 # 可视化学习效果
                 self.train_result_view(self.history)
          # 测试显示

@@ -68,3 +68,17 @@ ResNet (Residual Network): ResNet由微软研究院在2015年提出，通过引�
 ### 2024-4-1
 加上了模型选择，设置界面设置好，接口已连接好
 明天首要任务：选择结构后加载训练好的模型
+
+### 2024-4-2
+--models
+    --CNN
+        --train1
+        --train2
+    --LeNet-5
+        --train1
+            --model.h5
+            --image
+        --train2
+修改了更为合理的结构
+
+加载已训练模型差不多，接口没有接

@@ -26,10 +26,13 @@ class Application(tk.Tk):
         self.train_status.set()
         # 设置中断训练标志
         self.train_is_stop = False
-        # 模型加载路径（写在设置页里）
-        # self.load_model_path_pre = 'D:\My_Code_Project\三下机器学习课设\models\\train_3\single_number\model.h5'
+        # 模型加载路径（写在设置页里）-》初始化
         self.load_model_path_pre = None     # 预训练模型不需要加载，直接训练，又不是学习车牌数据集
         self.load_model_path_after = 'D:\My_Code_Project\三下机器学习课设\models\\train_1\car_number\model.h5'
+        # 设置模型加载和保存路径-》写在设置页里，这里只是初始化
+        self.load_or_save_path = './models'
+        # 设置模型结构类别 -》写在设置页里，这里只是初始化
+        self.selectd_model_type = 'CNN'
 
  
         # 功能子页面列表
@@ -50,11 +53,16 @@ class Application(tk.Tk):
 class SetPage(ttk.Frame):
     def __init__(self, master):
         super().__init__(master)
+        self.master_App = master
         self.configure(width=1170, height=400)
         self.grid(sticky='nsew') 
         master.grid_rowconfigure(1, weight=1)
         master.grid_columnconfigure(0, weight=1) 
         self.grid_propagate(1)
+        # 设置是否加载模型标记
+        self.is_load_model = False
+        # 设置模型加载路径
+        self.load_model_path = None
 
         # 添加配置
         self.model_select_label = self.__model_select_label(self)
@@ -69,6 +77,8 @@ class SetPage(ttk.Frame):
         self.test_size_input_entry = self.__test_size_input_entry(self)
         self.random_state_input_label = self.__random_state_input_label(self)
         self.random_state_input_entry = self.__random_state_input_entry(self)
+        self.model_load_or_save_folder_label = self.__model_load_or_save_folder_label(self)
+        self.model_load_or_save_folder_entry = self.__model_load_or_save_folder_entry(self)
         self.save_sets_button = self.__save_sets_button(self)
 
     def scrollbar_autohide(self,vbar, hbar, widget):
@@ -107,9 +117,10 @@ class SetPage(ttk.Frame):
         label = Label(parent,text="训练模型结构选择",anchor="center", )
         label.place(x=190, y=90, width=90, height=30)
         return label
-    def __model_select_box(self,parent):
+    def __model_select_box(self,parent):    # 模型结构选择框
         cb = Combobox(parent, state="readonly", )
         cb['values'] = ("CNN（浅层应用）","LeNet-5","AlexNet","VGGNet-16","ResNet-50","InceptionV3")
+        cb.bind("<<ComboboxSelected>>", lambda event: self.model_select_box_select(event))
         cb.current(0)
         cb.place(x=322, y=87, width=150, height=30)
         return cb
@@ -123,9 +134,10 @@ class SetPage(ttk.Frame):
         return label
     def __model_load_box(self,parent):
         cb = Combobox(parent, state="readonly", )
-        cb['values'] = ("请选择结构类型")
+        cb['values'] = ("训练新的模型")
         cb.current(0)
         cb.place(x=850, y=90, width=150, height=30)
+        cb.bind("<<ComboboxSelected>>", lambda event: self.model_load_box_select(event))
         return cb
     def __epoch_input_entry(self,parent):
         ipt = Entry(parent, )
@@ -151,7 +163,7 @@ class SetPage(ttk.Frame):
         ipt = Entry(parent, )
         ipt.place(x=850, y=180, width=150, height=30)
         ipt.insert(0, '0.2')
-        ipt.bind("<FocusOut>",lambda event:  self.is_valid_char(ipt, 'int', '128'))
+        ipt.bind("<FocusOut>",lambda event:  self.is_valid_char(ipt, 'float', '0.2'))
         return ipt
     def __random_state_input_label(self,parent):
         label = Label(parent,text="random_state",anchor="center", )
@@ -163,15 +175,92 @@ class SetPage(ttk.Frame):
         ipt.insert(0, '42')
         ipt.bind("<FocusOut>",lambda event:  self.is_valid_char(ipt, 'int', '42'))
         return ipt
+    def __model_load_or_save_folder_label(self,parent):
+        label = Label(parent,text="模型保存/加载文件夹",anchor="center")
+        label.place(x=190, y=360, width=90, height=30)
+        return label
+    def __model_load_or_save_folder_entry(self,parent):
+        ipt = Entry(parent)
+        ipt.place(x=320, y=360, width=150, height=30)
+        ipt.insert(0, './models')
+        ipt.config(state='readonly')
+        ipt.bind("<Button-1>",self.select_load_or_save_folder)
+        return ipt
     def __save_sets_button(self,parent):
         btn = Button(parent, text="保存配置", takefocus=False,command=self.save_sets)
         btn.place(x=1024, y=602, width=56, height=30)
         return btn
     
+    # 模型选择框选择事件
+    def model_select_box_select(self,event):
+        # 获取当前结构类型
+        model_secect_box_value = event.widget.get()
+        # 获取保存加载文件夹路径
+        model_load_or_save_folder = self.model_load_or_save_folder_entry.get()
+        model_path = None
+        dir_index =[] # 子目录索引(train1,train2,train3)
+        # 修改加载模型框的值
+        if model_secect_box_value == 'CNN（浅层应用）':
+            self.master_App.selectd_model_type = 'CNN'
+            model_path = os.path.join(model_load_or_save_folder, 'CNN')
+        elif model_secect_box_value == 'LeNet-5':
+            self.master_App.selectd_model_type = 'LeNet-5'
+            model_path = os.path.join(model_load_or_save_folder, 'LeNet-5')
+        elif model_secect_box_value == 'AlexNet':
+            self.master_App.selectd_model_type = 'AlexNet'
+            model_path = os.path.join(model_load_or_save_folder, 'AlexNet')
+        elif model_secect_box_value == 'VGGNet-16':
+            self.master_App.selectd_model_type = 'VGGNet-16'
+            model_path = os.path.join(model_load_or_save_folder, 'VGGNet-16')
+        elif model_secect_box_value == 'ResNet-50':
+            self.master_App.selectd_model_type = 'ResNet-50'
+            model_path = os.path.join(model_load_or_save_folder, 'ResNet-50')
+        elif model_secect_box_value == 'InceptionV3':
+            self.master_App.selectd_model_type = 'InceptionV3'
+            model_path = os.path.join(model_load_or_save_folder, 'InceptionV3')
+        if not os.path.exists(model_path):
+            os.makedirs(model_path)
+        # 获取目录下的所有子目录
+        dirs = [d for d in os.listdir(model_path) if os.path.isdir(os.path.join(model_path, d))]
+        # 计算子目录有model.h5文件的数量
+        for dir in dirs:
+            if os.path.exists(os.path.join(model_path, dir, 'model.h5')):
+                dir_index.append(dir)
+        self.model_load_box['values'] = ['训练新的模型']+dir_index
+        if dir_index == []:
+            self.model_load_box['values'] = ('无模型可加载，训练新的模型')
+        self.model_load_box.current(0)
+        # 只选择了类型，没有选择加载，所以不加载模型，设置加载模型标志为False和None
+        self.is_load_model = False
+        self.load_model_path = None
+        print(self.master_App.selectd_model_type, self.is_load_model, self.load_model_path)
+
     # 保存设置
     def save_sets(self):
         pass
-    
+
+    # 选择加载保存模型文件夹
+    def select_load_or_save_folder(self,event):
+        event.widget.config(state='normal')
+        directory = filedialog.askdirectory()  # 打开文件选择对话框
+        if not directory:
+            event.widget.config(state='readonly')
+            return
+        event.widget.delete(0, 'end')  # 删除 Entry 控件中的旧内容
+        event.widget.insert(0, directory)  # 插入新选择的文件夹路径
+        event.widget.config(state='readonly')
+
+    # 模型加载框选择事件
+    def model_load_box_select(self,event):
+        model_load_box_value = event.widget.get()
+        if model_load_box_value == '训练新的模型' or model_load_box_value == '无模型可加载，训练新的模型':
+            self.is_load_model = False
+            self.load_model_path = None
+        else:
+            self.is_load_model = True
+            self.load_model_path = os.path.join(os.path.abspath(self.model_load_or_save_folder_entry.get()), self.master_App.selectd_model_type, model_load_box_value, 'model.h5')
+        print(self.is_load_model, self.load_model_path)
+
     # 限制输入类型
     def is_valid_char(event,element,input_type,default):
         s = element.get()
@@ -256,17 +345,7 @@ class TrainPage(ttk.Frame):
         # 预训练(不需要提取车牌操作，直接用单数字训练集)
         def pre_train(self):
             # 获取模型结构选择
-            model_type = self.master_Train.master_TrainPage.master_App.frames[SetPage].model_select_box.get()
-            if model_type == 'CNN（浅层应用）':
-                model_type = 'CNN'
-            elif model_type == 'LeNet-5':
-                model_type = 'LeNet-5'
-            elif model_type == 'AlexNet':
-                model_type = 'AlexNet'
-            elif model_type == 'VGGNet-16':
-                model_type = 'VGGNet-16'
-            elif model_type == 'ResNet-50':
-                model_type = 'ResNet-50'
+            model_type = self.master_Train.master_TrainPage.master_App.selectd_model_type
             # 创建模型训练对象
             # 打印
             self.master_Train.master_TrainPage.log_frame.add_log("开始预训练{}".format(model_type), 'info')
