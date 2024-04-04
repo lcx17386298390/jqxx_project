@@ -82,3 +82,18 @@ ResNet (Residual Network): ResNet由微软研究院在2015年提出，通过引�
 修改了更为合理的结构
 
 加载已训练模型差不多，接口没有接
+测试api思路：
+    使用训练接口，加载设置面选择的模型
+
+
+YOLO (You Only Look Once)：YOLO是一个非常快速的目标检测算法，它可以在一次前向传播中检测出图像中的所有目标。YOLO有多个版本，包括YOLOv1, YOLOv2 (YOLO9000), YOLOv3, YOLOv4, 和YOLOv5。
+
+Faster R-CNN：Faster R-CNN是一种精度很高的目标检测算法，它使用了区域提议网络 (RPN) 来提取目标候选区，然后使用RoI池化和全连接层来分类和回归边界框。
+
+SSD (Single Shot MultiBox Detector)：SSD是一种在速度和精度之间取得平衡的目标检测算法，它在多个尺度上进行预测，使得它能够检测出不同大小的目标。
+
+RetinaNet：RetinaNet使用了一种名为Focal Loss的新颖损失函数，可以解决目标检测中的类别不平衡问题。这使得它在检测小目标（如远处的车牌）时表现得很好。              
+
+### 2024-4-4
+直接使用图片原图车牌部分进行训练，然后进行字符切割
+个别图片数据集命名有问题，考虑如何检测并排出

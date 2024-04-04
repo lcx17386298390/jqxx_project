@@ -189,6 +189,7 @@ class SetPage(ttk.Frame):
     def __save_sets_button(self,parent):
         btn = Button(parent, text="保存配置", takefocus=False,command=self.save_sets)
         btn.place(x=1024, y=602, width=56, height=30)
+        self.model_select_box.event_generate("<<ComboboxSelected>>")
         return btn
     
     # 模型选择框选择事件
@@ -256,9 +257,11 @@ class SetPage(ttk.Frame):
         if model_load_box_value == '训练新的模型' or model_load_box_value == '无模型可加载，训练新的模型':
             self.is_load_model = False
             self.load_model_path = None
+            self.master_App.load_model_path_pre = None
         else:
             self.is_load_model = True
             self.load_model_path = os.path.join(os.path.abspath(self.model_load_or_save_folder_entry.get()), self.master_App.selectd_model_type, model_load_box_value, 'model.h5')
+            self.master_App.load_model_path_pre = self.load_model_path
         print(self.is_load_model, self.load_model_path)
 
     # 限制输入类型

@@ -1,3 +1,12 @@
+##################################################################################
+# 数据清理
+# 作者: LCX (https://lifescript.top)
+# 文件名称：车牌图像提取
+# 本程序功能:
+# 1. 对CCPD2020数据集的车牌图像根据名称含义进行提取
+# 2. 提取车牌图像并保存
+###################################################################################
+
 import os
 import cv2
 import matplotlib.pyplot as plt
@@ -89,32 +98,32 @@ class TuXiangTiQu:
         # 对图像进行透视变换，得到拉正后的车牌图像
         plate_image = cv2.warpPerspective(image, M, (int(plate_width), int(plate_height)))
         
-        # 测试显示
-        # 创建一个新的figure
-        plt.figure()
+        # # 测试显示    # 提取图像，暂不显示
+        # # 创建一个新的figure
+        # plt.figure()
 
-        # 创建第一个subplot并显示原图
-        plt.subplot(1, 4, 1)
-        plt.imshow(image)
-        plt.title('Original Image')
+        # # 创建第一个subplot并显示原图
+        # plt.subplot(1, 4, 1)
+        # plt.imshow(image)
+        # plt.title('Original Image')
 
-        # 创建第二个subplot并显示带有提取框的图
-        plt.subplot(1, 4, 2)
-        plt.imshow(image_with_bbox)
-        plt.title('Image with Bounding Box')
+        # # 创建第二个subplot并显示带有提取框的图
+        # plt.subplot(1, 4, 2)
+        # plt.imshow(image_with_bbox)
+        # plt.title('Image with Bounding Box')
 
-        # 创建第三个subplot并显示带有车牌的图
-        plt.subplot(1, 4, 3)
-        plt.imshow(image_with_plate)
-        plt.title('Image with Plate')
+        # # 创建第三个subplot并显示带有车牌的图
+        # plt.subplot(1, 4, 3)
+        # plt.imshow(image_with_plate)
+        # plt.title('Image with Plate')
 
-        # 车牌
-        plt.subplot(1, 4, 4)
-        plt.imshow(plate_image)
-        plt.title('Plate Image')
+        # # 车牌
+        # plt.subplot(1, 4, 4)
+        # plt.imshow(plate_image)
+        # plt.title('Plate Image')
 
-        # 显示所有的subplot
-        plt.show()
+        # # 显示所有的subplot
+        # plt.show()
 
         # 返回车牌图像(rgb格式)
         return plate_image
@@ -125,7 +134,7 @@ class TuXiangTiQu:
         self.get_image_info(image_name)
         # 提取车牌图片
         car_number_image =  self.get_car_number_image(image_name)
-        self.save_car_number_image(image_name,car_number_image,'car_number_image')
+        self.save_car_number_image(image_name,car_number_image,str(self.folder_path+'/car_number'))
 
     # 保存车牌图片
     def save_car_number_image(self,image_name, image_file,save_path):
@@ -135,7 +144,10 @@ class TuXiangTiQu:
         save_path = save_path+'/'+image_name
         cv2.imwrite(save_path, cv2.cvtColor(image_file, cv2.COLOR_RGB2BGR))
 
-# txtq = TuXiangTiQu('D:\My_Code_Project\Image_Dateset')
-# txtq.start('03-103_253-267&425_483&565-483&565_271&497_267&425_480&483-0_0_3_25_25_33_25_25-110-47.jpg')
-
+# # 需要提取图片的时候，实例化类，然后调用start方法即可
+# path = "D:\My_Code_Project\Image_Dateset\car_number\CCPD2020\\val"
+# files = os.listdir(path)
+# txtq = TuXiangTiQu(path)
+# for file in files:
+#     txtq.start(file)
 

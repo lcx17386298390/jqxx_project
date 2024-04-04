@@ -11,6 +11,7 @@ from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
 from keras.utils.vis_utils import plot_model
 import keras
+import 图像提取
 
 # 定义模型训练类
 class Model_train:
@@ -93,10 +94,11 @@ class Model_train:
                 self.master_ModelTrain.train_is_stop = True
                 self.master_ModelTrain.master_App.train_is_stop = True
 
-    # 加载车牌数据
-    def load_data(self):
+    # 加载车牌数据  # 此处是返回的是车牌的标签和图片
+    def load_data(self, img_dir):
         images = []
         labels = []
+        txtq = 图像提取.TuXiangTiQu(img_dir)
         for filename in os.listdir(self.img_dir):
             img = cv2.imread(os.path.join(self.img_dir, filename), cv2.IMREAD_GRAYSCALE)
             if img is not None:
@@ -331,7 +333,7 @@ class Model_train:
                     return
                 print('模型训练完成')
                 # 保存模型
-                self.save_model(save_model_path, train_type='single_number')
+                self.save_model(save_model_path)
                 # 可视化学习效果
                 self.train_result_view(self.history)
             # 车牌训练
