@@ -142,10 +142,11 @@ class TuXiangTiQu:
         if not os.path.exists(save_path):
             os.makedirs(save_path)
         save_path = save_path+'/'+image_name
+        image_file = cv2.resize(image_file, (400, 100))
         cv2.imwrite(save_path, cv2.cvtColor(image_file, cv2.COLOR_RGB2BGR))
 
 # # 需要提取图片的时候，实例化类，然后调用start方法即可
-# path = "D:\My_Code_Project\Image_Dateset\car_number\CCPD2020\\val"
+# path = "D:\My_Code_Project\Image_Dateset\CCPD2020\\test"
 # files = os.listdir(path)
 # txtq = TuXiangTiQu(path)
 # for file in files:

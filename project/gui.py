@@ -33,7 +33,7 @@ class Application(tk.Tk):
         self.load_or_save_path = './models'
         # 设置模型结构类别 -》写在设置页里，这里只是初始化
         self.selectd_model_type = 'CNN'
-        on_pre_train = True
+        self.on_pre_train = False
 
  
         # 功能子页面列表
@@ -196,7 +196,7 @@ class SetPage(ttk.Frame):
         return label
     def __on_pre_train_button(self,parent):
         self.var1 = tk.IntVar()
-        self.var1.set(1)
+        self.var1.set(0)
         cb = tk.Checkbutton(parent, text='开启',variable=self.var1, onvalue=1, offvalue=0, command=self.on_pre_train_button_select)
         cb.place(x=850, y=360, width=150, height=30)
     def __save_sets_button(self,parent):
@@ -357,9 +357,10 @@ class TrainPage(ttk.Frame):
             self.master_Train.master_TrainPage.log_frame.add_log("开始训练车牌，模型结构：{}".format(model_type), 'info')
             self.model_train = Model_train(self.master_Train.master_TrainPage.master_App,self.master_Train,SetPage,model_type=model_type)
             # 使用模型测试接口
-            self.model_train.test("D:\My_Code_Project\Image_Dateset\\01-90_265-231&522_405&574-405&571_235&574_231&523_403&522-0_0_3_1_28_29_30_30-134-56.jpg", train_type='car_number', 
+            self.model_train.test(r"D:\My_Code_Project\Image_Dateset\car_number\train\0275-90_269-246&438_534&535-534&528_246&535_247&441_533&438-0_0_3_24_31_29_26_24-187-33.jpg", train_type='car_number', 
                                   img_dir_path = self.folder_path,load_model_path=self.master_Train.master_TrainPage.master_App.load_model_path_pre)
             # 训练完成，设置训练状态
+            self.model_train.train_is_stop = False
             self.model_train.train_is_stop = False
 
         # 预训练(不需要提取车牌操作，直接用单数字训练集)
@@ -371,9 +372,10 @@ class TrainPage(ttk.Frame):
             self.master_Train.master_TrainPage.log_frame.add_log("开始预训练，模型结构：{}".format(model_type), 'info')
             self.model_train = Model_train(self.master_Train.master_TrainPage.master_App,self.master_Train,SetPage,model_type=model_type)
             # 使用模型测试接口
-            self.model_train.test('D://My_Code_Project//Image_Dateset//single_number//VehicleLicense//Data//xin//xin_0001.jpg', train_type='single_number', 
+            self.model_train.test('D:\My_Code_Project\Image_Dateset\single_number\VehicleLicense\Data\wan\wan_0000.jpg', train_type='single_number', 
                                   txt_file_path=self.txt_file_path, load_model_path=self.master_Train.master_TrainPage.master_App.load_model_path_pre)
             # 训练完成，设置训练状态
+            self.model_train.train_is_stop = False
             self.model_train.train_is_stop = False
 
             
@@ -492,6 +494,7 @@ class TrainPage(ttk.Frame):
                     self.select_frame.train_button.config(text="开始训练")
                     self.master_TrainPage.log_frame.add_log("人为停止训练", 'info')
                     self.master_TrainPage.master.train_status.set()
+                    self.master_TrainPage.master_App.train_is_stop = True
                     print("人为停止训练")
                     # 启用选择文件夹按钮
                     self.select_frame.select_button.config(state=tk.NORMAL, cursor='arrow')

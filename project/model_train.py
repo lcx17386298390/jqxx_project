@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 from keras.utils.vis_utils import plot_model
 import keras
 import 图像提取
+import 图像处理
 
 # 定义模型训练类
 class Model_train:
@@ -128,14 +129,40 @@ class Model_train:
     def load_data(self, img_dir):
         images = []
         labels = []
-        txtq = 图像提取.TuXiangTiQu(img_dir)    # 具体信息可以获取txtq的image_info_dict
-        for filename in os.listdir(img_dir):
-            img = cv2.imread(os.path.join(img_dir, filename), cv2.IMREAD_GRAYSCALE)
-            img = cv2.resize(img, (400, 100))
-            label = list(map(int,filename.split('-')[4].split('_')))
-            if img is not None:
-                images.append(img)
-                labels.append(label)  # 假设文件名的格式为"label_index.jpg"
+        # 开启预训练模式
+        if self.master_App.on_pre_train:
+            # 也就是字符训练，只取车牌中的字符，切割车牌图片
+            for filename in os.listdir(img_dir):
+                if self.master_App.train_is_stop:
+                    print('训练中止')
+                    break
+                img = cv2.imread(os.path.join(img_dir, filename))
+                new_img = 图像处理.image_preprocess(img,filename)
+                images.append(new_img[10:90, 10:50])
+                images.append(new_img[10:90, 55:95])
+                images.append(new_img[10:90, 125:165])
+                images.append(new_img[10:90, 170:210])
+                images.append(new_img[10:90, 215:255])
+                images.append(new_img[10:90, 260:300])
+                images.append(new_img[10:90, 305:345])
+                images.append(new_img[10:90, 350:390])
+                label = list(map(int,filename.split('-')[4].split('_')))
+                for i in label:
+                    labels.append(i)
+                print('label:',label)
+        else:   # 未开启预训练，整个车牌图片作为训练集
+            for filename in os.listdir(img_dir):
+                if self.master_App.train_is_stop:
+                    print('训练中止')
+                    break
+                img = cv2.imread(os.path.join(img_dir, filename), cv2.IMREAD_GRAYSCALE)
+                img = cv2.resize(img, (400, 100))
+                label = list(map(int,filename.split('-')[4].split('_')))
+                if img is not None:
+                    images.append(img)
+                    labels.append(label)  # 假设文件名的格式为"label_index.jpg"
+        print('len_label:',len(labels))
+        print('len_images:',len(images))
         return images, labels
     
 
@@ -310,6 +337,7 @@ class Model_train:
         result = np.argmax(result)
         return result
     
+    
     # 保存模型
     def save_model(self, model_path):
         model_path = os.path.join(model_path, self.model_type)  # 加上模型结构类型
@@ -385,7 +413,7 @@ class Model_train:
             # 单字符训练
             if train_type == 'single_number':
                 self.history = self.fit_model(train_type=train_type, txt_file_path=txt_file_path)
-                if self.train_is_stop:
+                if self.master_App.train_is_stop:
                     print('训练中止')
                     return
                 print('模型训练完成')
@@ -399,9 +427,43 @@ class Model_train:
                 self.save_model(save_model_path, train_type='car_number')
                 # 可视化学习效果
                 self.train_result_view(self.history)
-         # 测试显示
-        new_img = cv2.imread(test_image_name, cv2.IMREAD_GRAYSCALE)
-        print('预测结果',self.predict(new_img))
+        else:
+            # 单字符训练
+            if train_type == 'single_number':
+                print("单字符已预训练，无需再次训练")
+            elif train_type == 'car_number':
+                self.history = self.fit_model(train_type=train_type, img_dir_path=img_dir_path)
+                self.save_model(save_model_path, train_type='car_number')
+                # 可视化学习效果
+                self.train_result_view(self.history)
+        # 测试显示
+        new_img = cv2.imread(test_image_name)
+        # 判断是否是预训练模式
+        if self.master_App.on_pre_train:
+            if train_type == 'single_number':
+                new_img = cv2.imread(test_image_name, cv2.IMREAD_GRAYSCALE)
+                print('预测结果',self.predict(new_img))
+            elif train_type == 'car_number':
+                new_img = 图像处理.image_preprocess(new_img)
+                img_list = []
+                img_list.append(new_img[10:90, 10:50])
+                img_list.append(new_img[10:90, 55:95])
+                img_list.append(new_img[10:90, 125:165])
+                img_list.append(new_img[10:90, 170:210])
+                img_list.append(new_img[10:90, 215:255])
+                img_list.append(new_img[10:90, 260:300])
+                img_list.append(new_img[10:90, 305:345])
+                img_list.append(new_img[10:90, 350:390])
+                plt.figure(figsize=(12, 6))
+                for i in range(8):
+                    plt.subplot(2, 4, i+1)
+                    plt.imshow(img_list[i], cmap='gray')
+                plt.show()
+                for img in img_list:
+                    print('预测结果',self.predict(img))
+        else:
+            print('预测结果',self.predict(new_img))
+                
 
 # # 实例化模型训练类
 # model_train = Model_train()
