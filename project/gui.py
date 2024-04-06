@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk,filedialog,messagebox
+from tkinter import ttk,filedialog,messagebox,PhotoImage
 from tkinter.ttk import *
 import logging
 import 图像提取
@@ -604,6 +604,7 @@ class TestPage(ttk.Frame):
         label = ttk.Label(self, text="训练结果展示")
         label.place(x=180, y=140)
 
+# 预测页面
 class YuCePage(ttk.Frame):   
     def __init__(self, master):
         super().__init__(master)
@@ -611,8 +612,38 @@ class YuCePage(ttk.Frame):
         master.grid_rowconfigure(1, weight=1)
         master.grid_columnconfigure(0, weight=1) 
         self.grid_propagate(1)
-        label = ttk.Label(self, text="预测")
-        label.place(x=180, y=140)
+        self.image_path = None
+        
+        self.tk_label_luo4j9hx = self.__tk_label_luo4j9hx(self)
+        self.tk_button_luo4l71o = self.__tk_button_luo4l71o(self)
+        self.tk_button_luo4l92v = self.__tk_button_luo4l92v(self)
+        self.tk_label_luo4nqp2 = self.__tk_label_luo4nqp2(self)
+
+    def __tk_label_luo4j9hx(self,parent):
+        label = Label(parent,text="请选择图片",anchor="center", borderwidth=1, relief="solid")
+        label.place(x=140, y=200, width=400, height=100)
+        return label
+    def __tk_button_luo4l71o(self,parent):
+        btn = Button(parent, text="图片选择", takefocus=False,command=self.select_image)
+        btn.place(x=200, y=360, width=90, height=30)
+        return btn
+    def __tk_button_luo4l92v(self,parent):
+        btn = Button(parent, text="开始识别", takefocus=False,)
+        btn.place(x=380, y=360, width=90, height=30)
+        return btn
+    def __tk_label_luo4nqp2(self,parent):
+        label = Label(parent,text="车牌号XXXXXXXX",anchor="center", borderwidth=1, relief="solid")
+        label.place(x=700, y=208, width=280, height=80)
+        return label
+    
+    def select_image(self):
+        file_path = filedialog.askopenfilename(filetypes=[("Image files", "*.jpg *.png")])
+        if file_path:
+            # 读取图片并转换为Tkinter可以使用的格式
+            self.image_path = file_path
+            image = Image.open(file_path)
+            self.photo = ImageTk.PhotoImage(image)
+            self.tk_label_luo4j9hx.configure(image=self.photo)
 
 # 自定义的日志处理器，用于将日志输出到指定的文本框中
 class TextHandler(logging.Handler):
