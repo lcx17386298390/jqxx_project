@@ -33,6 +33,7 @@ class Application(tk.Tk):
         self.load_or_save_path = './models'
         # 设置模型结构类别 -》写在设置页里，这里只是初始化
         self.selectd_model_type = 'CNN'
+        on_pre_train = True
 
  
         # 功能子页面列表
@@ -63,6 +64,7 @@ class SetPage(ttk.Frame):
         self.is_load_model = False
         # 设置模型加载路径
         self.load_model_path = None
+        self.var1 = 1
 
         # 添加配置
         self.model_select_label = self.__model_select_label(self)
@@ -79,6 +81,8 @@ class SetPage(ttk.Frame):
         self.random_state_input_entry = self.__random_state_input_entry(self)
         self.model_load_or_save_folder_label = self.__model_load_or_save_folder_label(self)
         self.model_load_or_save_folder_entry = self.__model_load_or_save_folder_entry(self)
+        self.on_pre_train_label = self.__on_pre_train_label(self)
+        self.on_pre_train_button = self.__on_pre_train_button(self)
         self.save_sets_button = self.__save_sets_button(self)
 
     def scrollbar_autohide(self,vbar, hbar, widget):
@@ -186,6 +190,15 @@ class SetPage(ttk.Frame):
         ipt.config(state='readonly')
         ipt.bind("<Button-1>",self.select_load_or_save_folder)
         return ipt
+    def __on_pre_train_label(self,parent):
+        label = Label(parent,text="预训练模式",anchor="center", )
+        label.place(x=720, y=360, width=90, height=30)
+        return label
+    def __on_pre_train_button(self,parent):
+        self.var1 = tk.IntVar()
+        self.var1.set(1)
+        cb = tk.Checkbutton(parent, text='开启',variable=self.var1, onvalue=1, offvalue=0, command=self.on_pre_train_button_select)
+        cb.place(x=850, y=360, width=150, height=30)
     def __save_sets_button(self,parent):
         btn = Button(parent, text="保存配置", takefocus=False,command=self.save_sets)
         btn.place(x=1024, y=602, width=56, height=30)
@@ -239,7 +252,16 @@ class SetPage(ttk.Frame):
     # 保存设置
     def save_sets(self):
         pass
+    
+    # 预训练模式选择事件
+    def on_pre_train_button_select(self):
+        if self.var1.get() == 1:
+            self.master_App.on_pre_train = True
+        else:
+            self.master_App.on_pre_train = False
+        print('开启预训练：',self.master_App.on_pre_train)
 
+        
     # 选择加载保存模型文件夹
     def select_load_or_save_folder(self,event):
         event.widget.config(state='normal')
@@ -324,26 +346,21 @@ class TrainPage(ttk.Frame):
             if self.train_type == 'pre_train':
                 self.pre_train()
             elif self.train_type == 'after_train':
-                self.get_image_info()
+                self.after_train()
         
-        # 获取图像信息(车牌训练)
-        def get_image_info(self):
-            files = os.listdir(self.folder_path)
-            self.txtq = 图像提取.TuXiangTiQu(self.folder_path)
-            for name in files:
-                # 判断是否暂停
-                if self.master_Train.master_TrainPage.master_App.train_status.is_set():
-                    self.master_Train.log_frame.add_log("人为停止训练", 'info')
-                    self.master_Train.progress_nums = 0
-                    print(self.txtq.image_info_dict)
-                    return
-                # 获取图片信息
-                image_info = self.txtq.start(name)
-                self.master_Train.progress_nums += 1
-                self.master_Train.master_TrainPage.log_frame.add_log("图片信息：{}".format(image_info),'info')
-                print("图片信息：{}".format(image_info))
-                self.master_Train.master_TrainPage.log_frame.add_log("训练进度：{}/{}".format(self.master_Train.progress_nums, len(files)), 'info')
-                self.master_Train.progress_nums_all = len(files) # 进度条总数值
+        # 车牌训练
+        def after_train(self):
+            # 获取模型结构选择
+            model_type = self.master_Train.master_TrainPage.master_App.selectd_model_type
+            # 创建模型训练对象
+            # 打印
+            self.master_Train.master_TrainPage.log_frame.add_log("开始训练车牌，模型结构：{}".format(model_type), 'info')
+            self.model_train = Model_train(self.master_Train.master_TrainPage.master_App,self.master_Train,SetPage,model_type=model_type)
+            # 使用模型测试接口
+            self.model_train.test("D:\My_Code_Project\Image_Dateset\\01-90_265-231&522_405&574-405&571_235&574_231&523_403&522-0_0_3_1_28_29_30_30-134-56.jpg", train_type='car_number', 
+                                  img_dir_path = self.folder_path,load_model_path=self.master_Train.master_TrainPage.master_App.load_model_path_pre)
+            # 训练完成，设置训练状态
+            self.model_train.train_is_stop = False
 
         # 预训练(不需要提取车牌操作，直接用单数字训练集)
         def pre_train(self):
@@ -351,8 +368,8 @@ class TrainPage(ttk.Frame):
             model_type = self.master_Train.master_TrainPage.master_App.selectd_model_type
             # 创建模型训练对象
             # 打印
-            self.master_Train.master_TrainPage.log_frame.add_log("开始预训练{}".format(model_type), 'info')
-            self.model_train = Model_train(self.master_Train.master_TrainPage.master_App,self.master_Train,SetPage,model_type='CNN')
+            self.master_Train.master_TrainPage.log_frame.add_log("开始预训练，模型结构：{}".format(model_type), 'info')
+            self.model_train = Model_train(self.master_Train.master_TrainPage.master_App,self.master_Train,SetPage,model_type=model_type)
             # 使用模型测试接口
             self.model_train.test('D://My_Code_Project//Image_Dateset//single_number//VehicleLicense//Data//xin//xin_0001.jpg', train_type='single_number', 
                                   txt_file_path=self.txt_file_path, load_model_path=self.master_Train.master_TrainPage.master_App.load_model_path_pre)
@@ -461,7 +478,7 @@ class TrainPage(ttk.Frame):
                     self.master_TrainPage.log_frame.add_log("开始训练\n训练进度······", 'info')
                     # 禁用选择文件夹按钮
                     self.select_frame.select_button.config(state=tk.DISABLED, cursor='no')
-                    self.train_data_handle = self.master_TrainPage.TrainDateHandle(folder_path,self)
+                    self.train_data_handle = self.master_TrainPage.TrainDateHandle(self, train_type='after_train', folder_path=folder_path, txt_file_path=folder_path)
                     # 进度条更新
                     self.progress_bar.update_progressbar()
                     # 使用多个线程训练
@@ -561,6 +578,7 @@ class TrainPage(ttk.Frame):
                     # 使用多个线程训练
                     future = threadPool.submit(self.train_data_handle.train_start())
                     print('训练完成')
+                    self.select_frame.train_button.config(text="开始训练")
                     self.master_TrainPage.master_App.train_status.set()
                     
                 else:     # 停止训练

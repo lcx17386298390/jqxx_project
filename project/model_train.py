@@ -3,9 +3,11 @@
 import os
 import cv2
 import numpy as np
+from keras.applications.resnet import ResNet50
+from keras.applications.vgg16 import VGG16
 from keras.models import Sequential
-from keras.layers import Dense, Dropout, Flatten, Activation, Add
-from keras.layers import Conv2D, MaxPooling2D, ZeroPadding2D, AveragePooling2D, BatchNormalization
+from keras.layers import Dense, Dropout, Flatten, Activation, Add, Lambda
+from keras.layers import Conv2D, MaxPooling2D, ZeroPadding2D, AveragePooling2D, BatchNormalization, GlobalAveragePooling2D
 from keras.utils import to_categorical
 from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
@@ -66,6 +68,34 @@ class Model_train:
             else:
                 self.images, self.labels = self.load_data(img_dir_path)
         self.train_image_nums = int(len(self.images)*(1-float(self.master_App.frames[self.SetPage].test_size_input_entry.get())))
+        pre_images = self.images
+        self.images = []
+        if self.model_type == 'CNN':
+            self.images = pre_images
+        elif self.model_type == 'LeNet-5':
+            for img in pre_images:
+                img = cv2.resize(img, (32, 32))
+                self.images.append(img)
+        elif self.model_type == 'AlexNet':
+            for img in pre_images:
+                img = cv2.resize(img, (224, 224))
+                img = np.expand_dims(img, axis=-1)
+                self.images.append(img)
+        elif self.model_type == 'VGGNet-16':
+            for img in pre_images:
+                img = cv2.resize(img, (224, 224))
+                # 将灰度图像复制三次，形成一个RGB图像
+                img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
+                # img = np.repeat(img, 3, axis=-1)  # 现在x_rgb的形状是(224, 224, 3)
+                self.images.append(img)
+        elif self.model_type == 'ResNet-50':
+            for img in pre_images:
+                img = cv2.resize(img, (32, 32))
+                self.images.append(img)
+        elif self.model_type == 'InceptionV3':
+            for img in pre_images:
+                img = cv2.resize(img, (75, 75))
+                self.images.append(img)
         self.images = np.array(self.images, dtype='float32')
         self.labels = np.array(self.labels)
         self.images /= 255
@@ -98,12 +128,14 @@ class Model_train:
     def load_data(self, img_dir):
         images = []
         labels = []
-        txtq = 图像提取.TuXiangTiQu(img_dir)
-        for filename in os.listdir(self.img_dir):
-            img = cv2.imread(os.path.join(self.img_dir, filename), cv2.IMREAD_GRAYSCALE)
+        txtq = 图像提取.TuXiangTiQu(img_dir)    # 具体信息可以获取txtq的image_info_dict
+        for filename in os.listdir(img_dir):
+            img = cv2.imread(os.path.join(img_dir, filename), cv2.IMREAD_GRAYSCALE)
+            img = cv2.resize(img, (400, 100))
+            label = list(map(int,filename.split('-')[4].split('_')))
             if img is not None:
                 images.append(img)
-                labels.append(int(filename.split('_')[0]))  # 假设文件名的格式为"label_index.jpg"
+                labels.append(label)  # 假设文件名的格式为"label_index.jpg"
         return images, labels
     
 
@@ -143,11 +175,11 @@ class Model_train:
             model.add(Conv2D(120, kernel_size=(5, 5), strides=(1, 1), activation='tanh', padding='valid'))
             model.add(Flatten())
             model.add(Dense(84, activation='tanh'))
-            model.add(Dense(10, activation='softmax'))
+            model.add(Dense(self.num_classes, activation='softmax'))
         # AlexNet结构
         elif model_type == 'AlexNet':
             # 添加第一层卷积层，有 96 个 11x11 的卷积核，步长为 4，激活函数为 ReLU
-            model.add(Conv2D(filters=96, input_shape=(224,224,3), kernel_size=(11,11), strides=(4,4), padding='valid'))
+            model.add(Conv2D(filters=96, input_shape=(224,224,1), kernel_size=(11,11), strides=(4,4), padding='valid'))
             model.add(Activation('relu'))
             # 添加最大池化层，池化窗口大小为 2x2
             model.add(MaxPooling2D(pool_size=(2,2), strides=(2,2), padding='valid'))
@@ -185,67 +217,92 @@ class Model_train:
             # 添加 Dropout 层，防止过拟合
             model.add(Dropout(0.4))
             # 添加输出层，有 17 个神经元（对应于 17 个类别），激活函数为 softmax
-            model.add(Dense(17))
+            # model.add(Dense(17))
+            model.add(Dense(self.num_classes))
             model.add(Activation('softmax'))
         # VGGNet-16
         elif model_type == 'VGGNet-16':
-            model.add(Conv2D(64, (3, 3), input_shape=(self.img_height, self.img_width, 1), padding='same', activation='relu'))
-            model.add(Conv2D(64, (3, 3), activation='relu', padding='same'))
-            model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
-            model.add(Conv2D(128, (3, 3), activation='relu', padding='same'))
-            model.add(Conv2D(128, (3, 3), activation='relu', padding='same'))
-            model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
-            model.add(Conv2D(256, (3, 3), activation='relu', padding='same'))
-            model.add(Conv2D(256, (3, 3), activation='relu', padding='same'))
-            model.add(Conv2D(256, (3, 3), activation='relu', padding='same'))
-            model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
-            model.add(Conv2D(512, (3, 3), activation='relu', padding='same'))
-            model.add(Conv2D(512, (3, 3), activation='relu', padding='same'))
-            model.add(Conv2D(512, (3, 3), activation='relu', padding='same'))
-            model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
-            model.add(Conv2D(512, (3, 3), activation='relu', padding='same'))
-            model.add(Conv2D(512, (3, 3), activation='relu', padding='same'))
-            model.add(Conv2D(512, (3, 3), activation='relu', padding='same'))
-            model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
-            model.add(Flatten())
-            model.add(Dense(4096, activation='relu'))
-            model.add(Dropout(0.5))
-            model.add(Dense(4096, activation='relu'))
-            model.add(Dropout(0.5))
-            model.add(Dense(self.num_classes, activation='softmax'))
+            # model.add(Conv2D(64, (3, 3), input_shape=(224, 224, 1), padding='same', activation='relu'))
+            # model.add(Conv2D(64, (3, 3), activation='relu', padding='same'))
+            # model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
+            # model.add(Conv2D(128, (3, 3), activation='relu', padding='same'))
+            # model.add(Conv2D(128, (3, 3), activation='relu', padding='same'))
+            # model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
+            # model.add(Conv2D(256, (3, 3), activation='relu', padding='same'))
+            # model.add(Conv2D(256, (3, 3), activation='relu', padding='same'))
+            # model.add(Conv2D(256, (3, 3), activation='relu', padding='same'))
+            # model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
+            # model.add(Conv2D(512, (3, 3), activation='relu', padding='same'))
+            # model.add(Conv2D(512, (3, 3), activation='relu', padding='same'))
+            # model.add(Conv2D(512, (3, 3), activation='relu', padding='same'))
+            # model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
+            # model.add(Conv2D(512, (3, 3), activation='relu', padding='same'))
+            # model.add(Conv2D(512, (3, 3), activation='relu', padding='same'))
+            # model.add(Conv2D(512, (3, 3), activation='relu', padding='same'))
+            # model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
+            # model.add(Flatten())
+            # model.add(Dense(4096, activation='relu'))
+            # model.add(Dropout(0.5))
+            # model.add(Dense(4096, activation='relu'))
+            # model.add(Dropout(0.5))
+            # model.add(Dense(self.num_classes, activation='softmax'))
+            model = VGG16(include_top=False, weights="imagenet", input_tensor=None, input_shape=(224, 224, 3), pooling=None, classes=self.num_classes)
         # ResNet-50结构
         elif model_type == 'ResNet-50':
-            model.add(ZeroPadding2D((3, 3), input_shape=(self.img_height, self.img_width, 1)))
-            model.add(Conv2D(64, (7, 7), strides=(2, 2), name='conv1', kernel_initializer='glorot_uniform'))
-            model.add(BatchNormalization(axis=3, name='bn_conv1'))
-            model.add(Activation('relu'))
-            model.add(MaxPooling2D((3, 3), strides=(2, 2)))
-            model.add(Conv2D(64, (1, 1), strides=(1, 1), kernel_initializer='glorot_uniform', name='res2a_branch2a'))
-            model.add(BatchNormalization(axis=3, name='bn2a_branch2a'))
-            model.add(Activation('relu'))
-            model.add(Conv2D(64, (3, 3), strides=(1, 1), kernel_initializer='glorot_uniform', padding='same', name='res2a_branch2b'))
-            model.add(BatchNormalization(axis=3, name='bn2a_branch2b'))
-            model.add(Activation('relu'))
-            model.add(Conv2D(256, (1, 1), strides=(1, 1), kernel_initializer='glorot_uniform', name='res2a_branch2c'))
-            model.add(Conv2D(256, (1, 1), strides=(1, 1), kernel_initializer='glorot_uniform', name='res2a_branch1'))
-            model.add(BatchNormalization(axis=3, name='bn2a_branch2c'))
-            model.add(BatchNormalization(axis=3, name='bn2a_branch1'))
-            model.add(Add()([model.layers[-1].output, model.layers[-2].output]))
-            model.add(Activation('relu'))
-            model.add(Conv2D(64, (1, 1), strides=(1, 1), kernel_initializer='glorot_uniform', name='res2b_branch2a'))
-            model.add(BatchNormalization(axis=3, name='bn2b_branch2a'))
-            model.add(Activation('relu'))
-            model.add(Conv2D(64, (3, 3), strides=(1, 1), kernel_initializer='glorot_uniform', padding='same', name='res2b'))
+            # model.add(ZeroPadding2D((3, 3), input_shape=(self.img_height, self.img_width, 1)))
+            # model.add(Conv2D(64, (7, 7), strides=(2, 2), name='conv1', kernel_initializer='glorot_uniform'))
+            # model.add(BatchNormalization(axis=3, name='bn_conv1'))
+            # model.add(Activation('relu'))
+            # model.add(MaxPooling2D((3, 3), strides=(2, 2)))
+            # model.add(Conv2D(64, (1, 1), strides=(1, 1), kernel_initializer='glorot_uniform', name='res2a_branch2a'))
+            # model.add(BatchNormalization(axis=3, name='bn2a_branch2a'))
+            # model.add(Activation('relu'))
+            # model.add(Conv2D(64, (3, 3), strides=(1, 1), kernel_initializer='glorot_uniform', padding='same', name='res2a_branch2b'))
+            # model.add(BatchNormalization(axis=3, name='bn2a_branch2b'))
+            # model.add(Activation('relu'))
+            # model.add(Conv2D(256, (1, 1), strides=(1, 1), kernel_initializer='glorot_uniform', name='res2a_branch2c'))
+            # model.add(Conv2D(256, (1, 1), strides=(1, 1), kernel_initializer='glorot_uniform', name='res2a_branch1'))
+            # model.add(BatchNormalization(axis=3, name='bn2a_branch2c'))
+            # model.add(BatchNormalization(axis=3, name='bn2a_branch1'))
+            # model.add(Add()([model.layers[-1].output, model.layers[-2].output]))
+            # # model.add(Lambda(lambda x: x[0] + x[1])([model.layers[-1].output, model.layers[-2].output]))
+            # model.add(Activation('relu'))
+            # model.add(Conv2D(64, (1, 1), strides=(1, 1), kernel_initializer='glorot_uniform', name='res2b_branch2a'))
+            # model.add(BatchNormalization(axis=3, name='bn2b_branch2a'))
+            # model.add(Activation('relu'))
+            # model.add(Conv2D(64, (3, 3), strides=(1, 1), kernel_initializer='glorot_uniform', padding='same', name='res2b'))
+            model = ResNet50(include_top=False, weights="imagenet", input_tensor=None, input_shape=(32, 32, 1), pooling=None, classes=self.num_classes)
         # InceptionV3结构
         elif model_type=='InceptionV3':
+            print('InceptionV3')
             from keras.applications.inception_v3 import InceptionV3
-            model = InceptionV3(include_top=True, weights=None, input_tensor=None, input_shape=(self.img_height, self.img_width, 1), pooling=None, classes=self.num_classes)
+            model = InceptionV3(include_top=False, weights="imagenet", input_tensor=None, input_shape=(75, 75, 1), pooling=None, classes=self.num_classes)
         return model
 
     # 预测函数
     def predict(self, img):
-        img = cv2.resize(img, (self.img_width, self.img_height))
-        img = np.reshape(img, (1, self.img_height, self.img_width, 1))
+        if self.model_type == 'CNN':
+            img = cv2.resize(img, (20, 20))
+            img = np.reshape(img, (1, 20, 20, 1))
+        elif self.model_type == 'LeNet-5':
+            img = cv2.resize(img, (32, 32))
+            img = np.reshape(img, (1, 32, 32, 1))
+        elif self.model_type == 'AlexNet':
+            img = cv2.resize(img, (224, 224))
+            img = np.expand_dims(img, axis=-1)
+            img = np.repeat(img, 3, axis=-1)
+        elif self.model_type == 'VGGNet-16':
+            img = cv2.resize(img, (224, 224))
+            img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
+            img = np.reshape(img, (1, 224, 224, 3))
+        elif self.model_type == 'ResNet-50':
+            img = cv2.resize(img, (32, 32))
+            img = np.expand_dims(img, axis=-1)
+            img = np.reshape(img, (1, 32, 32, 1))
+        elif self.model_type == 'InceptionV3':
+            img = cv2.resize(img, (75, 75))
+            img = np.reshape(img, (1, 75, 75, 1))
+        
         img = img.astype('float32')
         img /= 255
         result = self.model.predict(img)
