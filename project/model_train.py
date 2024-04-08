@@ -15,6 +15,7 @@ from keras.utils.vis_utils import plot_model
 import keras
 import 图像提取
 import 图像处理
+import json
 
 # 定义模型训练类
 class Model_train:
@@ -45,8 +46,23 @@ class Model_train:
         self.train_image_nums = int()
         # 识别模型
         self.shibie_model = None
+        # 省份、字母和广告码
+        self.provinces = ["皖", "沪", "津", "渝", "冀", "晋", "蒙", "辽", "吉", "黑", "苏", "浙", "京", "闽", "赣", "鲁", "豫", "鄂", "湘", "粤", "桂", "琼", "川", "贵", "云", "藏", "陕", "甘", "青", "宁", "新", "警", "学", "O"]
+        self.alphabets = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'J', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'O']
+        self.ads = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'J', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'O']
+        # 预训练车牌对应的标签字典
+        self.provinces_after = ['53', '25', '28', '59', '27', '48', '36', '33', '30', '24', '47', '64', '29', '37', '19', '34', '58', '16', '55', '60', '22', '43', '13', '21', '61', '63', '46', '20', '42', '39', '56']
+        self.alphabets_after = ['10', '11', '12', '14', '15', '17', '18', '23', '26', '31', '32', '35', '38', '40', '41', '44', '45', '49', '50', '51', '52', '54', '57', '62']
+        self.ads_after = ['10', '11', '12', '14', '15', '17', '18', '23', '26', '31', '32', '35', '38', '40', '41', '44', '45', '49', '50', '51', '52', '54', '57', '62', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
+
         # 创建模型
         self.model = self.create_model(model_type=model_type)
+
+        # 加载 JSON 文件
+        with open('D:\My_Code_Project\三下机器学习课设\解压数据包\单数字\VehicleLicense\dataset_info.json', 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        # 获取标签字典
+        self.label_dict = data['label_dict']
 
 
     # 训练模型(默认训练单字符识别模型, 传入参数为'single_number'则训练单字符识别模型，否则训练多字符识别模型)
@@ -159,8 +175,11 @@ class Model_train:
                 images.append(new_img[10:90, 305:345])
                 images.append(new_img[10:90, 350:390])
                 label = list(map(int,filename.split('-')[4].split('_')))
-                for i in label:
-                    labels.append(i)
+                labels.append(int(self.provinces_after[label[0]]))
+                labels.append(int(self.alphabets_after[label[1]]))
+                for i in label[2:]:
+                    labels.append(self.ads_after[i])
+
         else:   # 未开启预训练，整个车牌图片作为训练集
             for filename in os.listdir(img_dir):
                 if self.master_App.train_is_stop:
@@ -352,9 +371,13 @@ class Model_train:
     def predict(self, img, model):
         # 判断是否开启预训练模式
         img = 图像处理.image_preprocess(img, 'test_image')
+        cv2.imshow('test_image', img)
+        cv2.waitKey(0)
         if self.master_App.on_pre_train:
             if self.model_type == 'CNN':
                 img = cv2.resize(img, (20, 20))
+                cv2.imshow('test_image', img)
+                cv2.waitKey(0)
                 img = np.reshape(img, (1, 20, 20, 1))
             elif self.model_type == 'LeNet-5':
                 img = cv2.resize(img, (32, 32))
@@ -500,8 +523,9 @@ class Model_train:
         if self.master_App.on_pre_train:
             if train_type == 'single_number':
                 # new_img = cv2.imread(test_image_name, cv2.IMREAD_GRAYSCALE)
-                print('预测结果',self.predict(new_img,self.model))
-                self.master_App.log_frame.add_log('预测结果:{}'.format(self.predict(new_img,self.model)), 'info')
+                result = self.predict(new_img,self.model)
+                print('预测结果',self.label_dict[str(result[0])])
+                self.master_App.log_frame.add_log('预测结果:{}'.format(self.label_dict[str(result[0])]), 'info')
             elif train_type == 'car_number':
                 img_list = []
                 img_list.append(new_img[10:90, 10:50])
@@ -518,11 +542,16 @@ class Model_train:
                     plt.imshow(img_list[i], cmap='gray')
                 plt.show()
                 for img in img_list:
-                    print('预测结果',self.predict(img, self.model))
-                    self.master_App.log_frame.add_log('预测结果:{}'.format(self.predict(img, self.model)), 'info')
+                    result = self.predict(img,self.model)
+                    print('预测结果',self.label_dict[str(result[0])])
+                    self.master_App.log_frame.add_log('预测结果:{}'.format(self.label_dict[str(result[0])]), 'info')
         else:
-            print('预测结果',self.predict(new_img,self.model))
-            self.master_App.log_frame.add_log('预测结果:{}'.format(self.predict(new_img,self.model)), 'info')
+            result = self.predict(new_img,self.model)
+            car_number = self.provinces[result[0][0]] + \
+                    self.alphabets[result[0][1]] + \
+                    ''.join([self.ads[i] for i in result[0][2:]])
+            print('预测结果',car_number)
+            self.master_App.log_frame.add_log('预测结果:{}'.format(car_number), 'info')
     
     # 预测接口
     def shibie_test(self, img_path, load_model_path=None):
@@ -545,6 +574,12 @@ class Model_train:
                 raise ValueError('模型加载失败，无法识别')
         # 测试显示
         new_img = cv2.imread(img_path)
+        # 判断new_img的大小
+        if new_img.shape[0] == 20 and new_img.shape[1] == 20:
+            result = self.predict(new_img,self.shibie_model)
+            print('单字符预测结果',self.label_dict[str(result[0])])
+            self.master_App.log_frame.add_log('单字符预测结果:{}'.format(self.label_dict[str(result[0])]), 'info')
+            return self.label_dict[str(result[0])]
         # 判断是否是预训练模式
         if self.master_App.on_pre_train:
             # new_img = 图像处理.image_preprocess(new_img, 'shibie_image')
@@ -563,18 +598,15 @@ class Model_train:
                 plt.imshow(img_list[i], cmap='gray')
             plt.show()
             for img in img_list:
-                print('预测结果',self.predict(img,self.shibie_model))
-                self.master_App.log_frame.add_log('预测结果:{}'.format(self.predict(img,self.shibie_model)), 'info')
+                result = self.predict(img,self.shibie_model)
+                print('预测结果',self.label_dict[str(result[0])])
+                self.master_App.log_frame.add_log('预测结果:{}'.format(self.label_dict[str(result[0])]), 'info')
         else:
             # new_img = 图像处理.image_preprocess(new_img, 'shibie_image')
             result = self.predict(new_img,self.shibie_model)
-            # 省份、字母和广告码
-            provinces = ["皖", "沪", "津", "渝", "冀", "晋", "蒙", "辽", "吉", "黑", "苏", "浙", "京", "闽", "赣", "鲁", "豫", "鄂", "湘", "粤", "桂", "琼", "川", "贵", "云", "藏", "陕", "甘", "青", "宁", "新", "警", "学", "O"]
-            alphabets = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'J', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'O']
-            ads = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'J', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'O']
-            car_number = provinces[result[0][0]] + \
-                    alphabets[result[0][1]] + \
-                    ''.join([ads[i] for i in result[0][2:]])
+            car_number = self.provinces[result[0][0]] + \
+                    self.alphabets[result[0][1]] + \
+                    ''.join([self.ads[i] for i in result[0][2:]])
             print('预测结果',car_number)
             self.master_App.log_frame.add_log('预测结果:{}'.format(car_number), 'info')
             return car_number

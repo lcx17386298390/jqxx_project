@@ -4,7 +4,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 def gray_guss(image):
-    image = cv2.GaussianBlur(image, (3, 3), 0)
+    image = cv2.GaussianBlur(image, (1, 1), 0)
     gray_image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
     return gray_image
 
