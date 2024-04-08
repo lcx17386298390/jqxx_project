@@ -43,11 +43,10 @@ class Model_train:
         self.current_batche = 0
         # 训练图片总数量（用于进度条，训练数量= 图片总数*（1-testsize））
         self.train_image_nums = int()
-
-
+        # 识别模型
+        self.shibie_model = None
         # 创建模型
         self.model = self.create_model(model_type=model_type)
-        self.model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 
 
     # 训练模型(默认训练单字符识别模型, 传入参数为'single_number'则训练单字符识别模型，否则训练多字符识别模型)
@@ -68,6 +67,8 @@ class Model_train:
                 raise ValueError('车牌训练文件夹路径为空')
             else:
                 self.images, self.labels = self.load_data(img_dir_path)
+                print("labels结构",self.labels)
+                self.master_App.log_frame.add_log('labels结构：{}'.format(self.labels), 'info')
         self.train_image_nums = int(len(self.images)*(1-float(self.master_App.frames[self.SetPage].test_size_input_entry.get())))
         pre_images = self.images
         self.images = []
@@ -111,6 +112,7 @@ class Model_train:
         self.labels = to_categorical(self.labels, self.num_classes) # 将类别标签转换为one-hot编码
         self.x_train, self.x_test, self.y_train, self.y_test = train_test_split(self.images, self.labels, test_size=self.test_size, random_state=self.random_state)
         history = self.model.fit(self.x_train, self.y_train, batch_size=self.batch_size, epochs=self.epochs, verbose=1, validation_data=(self.x_test, self.y_test), callbacks=[my_callback])
+        self.shibie_model = self.model
         return history
     
     # 定义中止训练的回调函数
@@ -137,12 +139,14 @@ class Model_train:
     def load_data(self, img_dir):
         images = []
         labels = []
+        self.master_App.log_frame.add_log('数据提取中，请稍等······', 'info')
         # 开启预训练模式
         if self.master_App.on_pre_train:
             # 也就是字符训练，只取车牌中的字符，切割车牌图片
             for filename in os.listdir(img_dir):
                 if self.master_App.train_is_stop:
                     print('训练中止')
+                    self.master_App.log_frame.add_log('训练中止', 'info')
                     break
                 img = cv2.imread(os.path.join(img_dir, filename))
                 new_img = 图像处理.image_preprocess(img,filename)
@@ -157,20 +161,24 @@ class Model_train:
                 label = list(map(int,filename.split('-')[4].split('_')))
                 for i in label:
                     labels.append(i)
-                print('label:',label)
         else:   # 未开启预训练，整个车牌图片作为训练集
             for filename in os.listdir(img_dir):
                 if self.master_App.train_is_stop:
                     print('训练中止')
+                    self.master_App.log_frame.add_log('训练中止', 'info')
                     break
-                img = cv2.imread(os.path.join(img_dir, filename), cv2.IMREAD_GRAYSCALE)
-                img = cv2.resize(img, (400, 100))
+                img = cv2.imread(os.path.join(img_dir, filename))
+                img = 图像处理.image_preprocess(img,filename)
+                img = cv2.resize(img, (400, 100))   # 400为宽，100为高
+                img = np.reshape(img, (100, 400, 1)) # 100为高，400为宽
                 label = list(map(int,filename.split('-')[4].split('_')))
                 if img is not None:
                     images.append(img)
                     labels.append(label)  # 假设文件名的格式为"label_index.jpg"
+        self.master_App.log_frame.add_log('数据提取完成', 'info')
         print('len_label:',len(labels))
         print('len_images:',len(images))
+        self.master_App.log_frame.add_log('len_label:{};  len_images:{}'.format(len(labels),len(images)), 'info')
         return images, labels
     
 
@@ -311,25 +319,39 @@ class Model_train:
                 model = ResNet50(include_top=False, weights="imagenet", input_tensor=None, input_shape=(32, 32, 1), pooling=None, classes=self.num_classes)
             # InceptionV3结构
             elif model_type=='InceptionV3':
-                print('InceptionV3')
                 from keras.applications.inception_v3 import InceptionV3
                 model = InceptionV3(include_top=False, weights="imagenet", input_tensor=None, input_shape=(75, 75, 1), pooling=None, classes=self.num_classes)
+            model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
         else:   # 非预训练模式只开启CNN模型
             if model_type == 'CNN':
+                # model.add(Conv2D(32, kernel_size=(3, 3), activation='relu', input_shape=(100, 400, 1)))
+                # model.add(Conv2D(64, (3, 3), activation='relu'))
+                # model.add(MaxPooling2D(pool_size=(2, 2)))
+                # model.add(Dropout(0.25))
+                # model.add(Flatten())
+                # model.add(Dense(128, activation='relu'))
+                # model.add(Dropout(0.5))
+                # model.add(Reshape((8,-1)))
+                # model.add(TimeDistributed(Dense(self.num_classes, activation='sigmoid')))
+                # model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])  # 使用binary_crossentropy损失
+
+                model = Sequential()
                 model.add(Conv2D(32, kernel_size=(3, 3), activation='relu', input_shape=(100, 400, 1)))
+                model.add(MaxPooling2D(pool_size=(2, 2)))
                 model.add(Conv2D(64, (3, 3), activation='relu'))
                 model.add(MaxPooling2D(pool_size=(2, 2)))
-                model.add(Dropout(0.25))
                 model.add(Flatten())
                 model.add(Dense(128, activation='relu'))
-                model.add(Dropout(0.5))
-                model.add(Reshape((8,-1)))
-                model.add(TimeDistributed(Dense(self.num_classes, activation='softmax')))
+                model.add(Dense(8 * self.num_classes, activation='softmax'))  # 输出层有8*num_classes个神经元
+                model.add(Reshape((8, self.num_classes)))  # 将输出重塑为8个字符，每个字符num_classes个类别
+                model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+
         return model
 
     # 预测函数
-    def predict(self, img):
+    def predict(self, img, model):
         # 判断是否开启预训练模式
+        img = 图像处理.image_preprocess(img, 'test_image')
         if self.master_App.on_pre_train:
             if self.model_type == 'CNN':
                 img = cv2.resize(img, (20, 20))
@@ -354,14 +376,13 @@ class Model_train:
                 img = np.reshape(img, (1, 75, 75, 1))
         else:   # 非预训练模式只开启CNN模型
             if self.model_type == 'CNN':
-                img = cv2.resize(img, (100, 400))
-                img = np.reshape(img, (1, 100, 400, 1))
-        
+                img = cv2.resize(img, (400, 100))   # 400为宽，100为高
+                img = np.reshape(img, (1, 100, 400, 1))     # 100为高，400为宽
         img = img.astype('float32')
         img /= 255
-        result = self.model.predict(img)
+        result = model.predict(img)
         # 输出预测结果
-        result = np.argmax(result)
+        result = np.argmax(result, axis=-1)
         return result
     
     
@@ -380,12 +401,14 @@ class Model_train:
         self.save_file_path = os.path.join(self.save_train_file_floder, 'model.h5')
         self.model.save(self.save_file_path)
         print('模型保存成功，保存路径为:', os.path.abspath(self.save_file_path))
+        self.master_App.log_frame.add_log('模型保存成功，保存路径为:{}'.format(os.path.abspath(self.save_file_path)), 'info')
     
     # 学习效果查看
     def train_result_view(self,history):
         score = self.model.evaluate(self.x_test, self.y_test, verbose=0)
         print('Test loss:', score[0])
         print('Test accuracy:', score[1])
+        self.master_App.log_frame.add_log('Test loss:{};  Test accuracy:{}'.format(score[0],score[1]), 'info')
         # 绘制训练 & 验证的准确率值
         plt.figure(figsize=(12, 6))
         plt.subplot(1, 2, 1)
@@ -416,12 +439,15 @@ class Model_train:
                 self.model.load_weights(model_path)
             except Exception as e:
                 print('模型加载失败，将重新预训练模型')
+                self.master_App.log_frame.add_log('模型加载失败，将重新预训练模型', 'info')
                 return None
             else:
                 print('模型加载成功')
+                self.master_App.log_frame.add_log('模型加载成功', 'info')
                 return self.model
         else:
             print('模型文件不存在，将重新预训练模型')
+            self.master_App.log_frame.add_log('模型文件不存在，将重新预训练模型', 'info')
             return None
 
     # 开始训练
@@ -431,8 +457,10 @@ class Model_train:
         # 加载模型
         if load_model_path is None:
             print('没有模型文件，开始训练')
+            self.master_App.log_frame.add_log('没有模型文件，开始训练', 'info')
         else:
             print('正在加载模型文件:', os.path.abspath(load_model_path))
+            self.master_App.log_frame.add_log('正在加载模型文件:{}'.format(os.path.abspath(load_model_path)), 'info')
             load_model = self.load_model(load_model_path)
             self.model = load_model if load_model is not None else self.model
         # 模型加载不成功（错误/路径为空），开始训练
@@ -442,8 +470,10 @@ class Model_train:
                 self.history = self.fit_model(train_type=train_type, txt_file_path=txt_file_path)
                 if self.master_App.train_is_stop:
                     print('训练中止')
+                    self.master_App.log_frame.add_log('训练中止', 'info')
                     return
                 print('模型训练完成')
+                self.master_App.log_frame.add_log('模型训练完成', 'info')
                 # 保存模型
                 self.save_model(save_model_path)
                 # 可视化学习效果
@@ -458,6 +488,7 @@ class Model_train:
             # 单字符训练
             if train_type == 'single_number':
                 print("单字符已预训练，无需再次训练")
+                self.master_App.log_frame.add_log('单字符已预训练，无需再次训练', 'info')
             elif train_type == 'car_number':
                 self.history = self.fit_model(train_type=train_type, img_dir_path=img_dir_path)
                 self.save_model(save_model_path)
@@ -468,10 +499,10 @@ class Model_train:
         # 判断是否是预训练模式
         if self.master_App.on_pre_train:
             if train_type == 'single_number':
-                new_img = cv2.imread(test_image_name, cv2.IMREAD_GRAYSCALE)
-                print('预测结果',self.predict(new_img))
+                # new_img = cv2.imread(test_image_name, cv2.IMREAD_GRAYSCALE)
+                print('预测结果',self.predict(new_img,self.model))
+                self.master_App.log_frame.add_log('预测结果:{}'.format(self.predict(new_img,self.model)), 'info')
             elif train_type == 'car_number':
-                new_img = 图像处理.image_preprocess(new_img, test_image_name)
                 img_list = []
                 img_list.append(new_img[10:90, 10:50])
                 img_list.append(new_img[10:90, 55:95])
@@ -487,10 +518,67 @@ class Model_train:
                     plt.imshow(img_list[i], cmap='gray')
                 plt.show()
                 for img in img_list:
-                    print('预测结果',self.predict(img))
+                    print('预测结果',self.predict(img, self.model))
+                    self.master_App.log_frame.add_log('预测结果:{}'.format(self.predict(img, self.model)), 'info')
         else:
-            print('预测结果',self.predict(new_img))
-                
+            print('预测结果',self.predict(new_img,self.model))
+            self.master_App.log_frame.add_log('预测结果:{}'.format(self.predict(new_img,self.model)), 'info')
+    
+    # 预测接口
+    def shibie_test(self, img_path, load_model_path=None):
+        load_model = None
+        self.history = None
+        if self.shibie_model is None:
+            # 加载模型
+            if load_model_path is None:
+                print('没有模型文件，无法识别')
+                raise ValueError('没有模型文件，无法识别')
+            else:
+                print('正在加载模型文件:', os.path.abspath(load_model_path))
+                self.master_App.log_frame.add_log('正在加载模型文件:{}'.format(os.path.abspath(load_model_path)), 'info')
+                load_model = self.load_model(load_model_path)
+                self.shibie_model = load_model if load_model is not None else self.model
+            # 模型加载不成功（错误/路径为空），无法识别
+            if load_model is None:
+                print('模型加载失败，无法识别')
+                self.master_App.log_frame.add_log('模型加载失败，无法识别', 'info')
+                raise ValueError('模型加载失败，无法识别')
+        # 测试显示
+        new_img = cv2.imread(img_path)
+        # 判断是否是预训练模式
+        if self.master_App.on_pre_train:
+            # new_img = 图像处理.image_preprocess(new_img, 'shibie_image')
+            img_list = []
+            img_list.append(new_img[10:90, 10:50])
+            img_list.append(new_img[10:90, 55:95])
+            img_list.append(new_img[10:90, 125:165])
+            img_list.append(new_img[10:90, 170:210])
+            img_list.append(new_img[10:90, 215:255])
+            img_list.append(new_img[10:90, 260:300])
+            img_list.append(new_img[10:90, 305:345])
+            img_list.append(new_img[10:90, 350:390])
+            plt.figure(figsize=(12, 6))
+            for i in range(8):
+                plt.subplot(2, 4, i+1)
+                plt.imshow(img_list[i], cmap='gray')
+            plt.show()
+            for img in img_list:
+                print('预测结果',self.predict(img,self.shibie_model))
+                self.master_App.log_frame.add_log('预测结果:{}'.format(self.predict(img,self.shibie_model)), 'info')
+        else:
+            # new_img = 图像处理.image_preprocess(new_img, 'shibie_image')
+            result = self.predict(new_img,self.shibie_model)
+            # 省份、字母和广告码
+            provinces = ["皖", "沪", "津", "渝", "冀", "晋", "蒙", "辽", "吉", "黑", "苏", "浙", "京", "闽", "赣", "鲁", "豫", "鄂", "湘", "粤", "桂", "琼", "川", "贵", "云", "藏", "陕", "甘", "青", "宁", "新", "警", "学", "O"]
+            alphabets = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'J', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'O']
+            ads = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'J', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'O']
+            car_number = provinces[result[0][0]] + \
+                    alphabets[result[0][1]] + \
+                    ''.join([ads[i] for i in result[0][2:]])
+            print('预测结果',car_number)
+            self.master_App.log_frame.add_log('预测结果:{}'.format(car_number), 'info')
+            return car_number
+        
 
 # # 实例化模型训练类
 # model_train = Model_train()

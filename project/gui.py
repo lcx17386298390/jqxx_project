@@ -34,6 +34,7 @@ class Application(tk.Tk):
         # 设置模型结构类别 -》写在设置页里，这里只是初始化
         self.selectd_model_type = 'CNN'
         self.on_pre_train = False
+        self.log_frame = None
 
  
         # 功能子页面列表
@@ -248,6 +249,10 @@ class SetPage(ttk.Frame):
         self.is_load_model = False
         self.load_model_path = None
         print(self.master_App.selectd_model_type, self.is_load_model, self.load_model_path)
+        self.master_App.log_frame.add_log("选择模型结构：{}".format(self.master_App.selectd_model_type), 'info')
+        self.master_App.log_frame.add_log("是否加载模型：{}".format(self.is_load_model), 'info')
+        self.master_App.log_frame.add_log("加载模型路径：{}".format(self.load_model_path), 'info')
+
 
     # 保存设置
     def save_sets(self):
@@ -260,6 +265,7 @@ class SetPage(ttk.Frame):
         else:
             self.master_App.on_pre_train = False
         print('开启预训练：',self.master_App.on_pre_train)
+        self.master_App.log_frame.add_log("开启预训练：{}".format(self.master_App.on_pre_train), 'info')
 
         
     # 选择加载保存模型文件夹
@@ -284,7 +290,11 @@ class SetPage(ttk.Frame):
             self.is_load_model = True
             self.load_model_path = os.path.join(os.path.abspath(self.model_load_or_save_folder_entry.get()), self.master_App.selectd_model_type, model_load_box_value, 'model.h5')
             self.master_App.load_model_path_pre = self.load_model_path
+            self.master_App.frames[TestPage].effect_image_path = os.path.join(os.path.abspath(self.model_load_or_save_folder_entry.get()), self.master_App.selectd_model_type, model_load_box_value, '训练效果.png')
+            self.master_App.frames[TestPage].update_train_effect()
         print(self.is_load_model, self.load_model_path)
+        self.master_App.log_frame.add_log("是否加载模型：{}".format(self.is_load_model), 'info')
+        self.master_App.log_frame.add_log("加载模型路径：{}".format(self.load_model_path), 'info')
 
     # 限制输入类型
     def is_valid_char(event,element,input_type,default):
@@ -331,6 +341,7 @@ class TrainPage(ttk.Frame):
         # 创建日志输出台
         self.log_frame = LogClass(self)
         self.log_frame.frame.pack(side=tk.BOTTOM, fill=tk.BOTH)
+        self.master_App.log_frame = self.log_frame
 
 
     # 训练数据处理类
@@ -422,6 +433,7 @@ class TrainPage(ttk.Frame):
             # 进度条初始化
             self.progress_nums = 0
             self.progress_nums_all = 9999999999999
+            self.train_data_handle = None
 
             # 添加标签说明
             self.type_label = ttk.Label(self, text="车牌训练", font=("微软雅黑", 11))
@@ -581,6 +593,7 @@ class TrainPage(ttk.Frame):
                     # 使用多个线程训练
                     future = threadPool.submit(self.train_data_handle.train_start())
                     print('训练完成')
+                    self.master_TrainPage.master_App.log_frame.add_log("训练完成", 'info')
                     self.select_frame.train_button.config(text="开始训练")
                     self.master_TrainPage.master_App.train_status.set()
                     
@@ -589,6 +602,7 @@ class TrainPage(ttk.Frame):
                     self.master_TrainPage.log_frame.add_log("预训练停止中，请稍等···", 'info')
                     self.master_TrainPage.master_App.train_status.set()
                     print("人为停止训练")
+                    self.master_TrainPage.master_App.log_frame.add_log("人为停止训练", 'info')
                     # 启用选择文件夹按钮
                     self.select_frame.select_button.config(state=tk.NORMAL, cursor='arrow')
 
@@ -601,8 +615,31 @@ class TestPage(ttk.Frame):
         master.grid_rowconfigure(1, weight=1)
         master.grid_columnconfigure(0, weight=1) 
         self.grid_propagate(1)
-        label = ttk.Label(self, text="训练结果展示")
-        label.place(x=180, y=140)
+        self.master_App = master
+        # 图片路径
+        self.effect_image_path = None
+
+        self.tk_label_lup57mn5 = self.__tk_label_lup57mn5(self)
+        self.tk_label_lup5joph = self.__tk_label_lup5joph(self)
+
+    def __tk_label_lup57mn5(self,parent):
+        label = Label(parent,text="请加载模型或训练模型",anchor="center", borderwidth=1, relief="solid")
+        label.place(x=190, y=120, width=800, height=400)
+        return label
+    def __tk_label_lup5joph(self,parent):
+        label = Label(parent,text="模型训练效果",anchor="center", )
+        label.place(x=80, y=45, width=90, height=30)
+        return label
+    
+    # 更新训练效果显示
+    def update_train_effect(self):
+        if self.effect_image_path:
+            # 读取图片并转换为Tkinter可以使用的格式
+            image = Image.open(self.effect_image_path)
+            image = image.resize((800,400), Image.LANCZOS)
+            self.photo = ImageTk.PhotoImage(image)
+            self.tk_label_lup57mn5.configure(image=self.photo)
+        
 
 # 预测页面
 class YuCePage(ttk.Frame):   
@@ -613,6 +650,8 @@ class YuCePage(ttk.Frame):
         master.grid_columnconfigure(0, weight=1) 
         self.grid_propagate(1)
         self.image_path = None
+        self.master_App = master
+        self.car_number = None
         
         self.tk_label_luo4j9hx = self.__tk_label_luo4j9hx(self)
         self.tk_button_luo4l71o = self.__tk_button_luo4l71o(self)
@@ -628,7 +667,7 @@ class YuCePage(ttk.Frame):
         btn.place(x=200, y=360, width=90, height=30)
         return btn
     def __tk_button_luo4l92v(self,parent):
-        btn = Button(parent, text="开始识别", takefocus=False,)
+        btn = Button(parent, text="开始识别", takefocus=False,command=self.start_shibie)
         btn.place(x=380, y=360, width=90, height=30)
         return btn
     def __tk_label_luo4nqp2(self,parent):
@@ -645,6 +684,19 @@ class YuCePage(ttk.Frame):
             self.photo = ImageTk.PhotoImage(image)
             self.tk_label_luo4j9hx.configure(image=self.photo)
 
+    # 更新车牌号显示Label
+    def update_car_number(self):
+        self.tk_label_luo4nqp2['text'] = self.car_number
+
+    def start_shibie(self):
+        # 没有开始训练
+        if self.master_App.frames[TrainPage].after_train.train_data_handle is None:
+            model_train = Model_train(self.master_App,None,None,self.master_App.selectd_model_type)
+            self.car_number = model_train.shibie_test(img_path=self.image_path,load_model_path=self.master_App.load_model_path_pre)
+            self.update_car_number()
+        else:   #已有训练
+            self.car_number = self.master_App.frames[TrainPage].after_train.train_data_handle.model_train.shibie_test(img_path=self.image_path,load_model_path=self.master_App.load_model_path_pre)
+            self.update_car_number()
 # 自定义的日志处理器，用于将日志输出到指定的文本框中
 class TextHandler(logging.Handler):
     def __init__(self, text):
