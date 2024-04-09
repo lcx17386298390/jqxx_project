@@ -597,10 +597,13 @@ class Model_train:
                 plt.subplot(2, 4, i+1)
                 plt.imshow(img_list[i], cmap='gray')
             plt.show()
+            car_number = ''
             for img in img_list:
                 result = self.predict(img,self.shibie_model)
                 print('预测结果',self.label_dict[str(result[0])])
                 self.master_App.log_frame.add_log('预测结果:{}'.format(self.label_dict[str(result[0])]), 'info')
+                car_number += self.label_dict[str(result[0])]
+            return car_number
         else:
             # new_img = 图像处理.image_preprocess(new_img, 'shibie_image')
             result = self.predict(new_img,self.shibie_model)
